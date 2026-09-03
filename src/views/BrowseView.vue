@@ -2,8 +2,15 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import FilterPanel from '@/components/FilterPanel.vue'
+import { activeCount, emptyFilters, toQuery } from '@/lib/browse-filters'
 import { ApiError, api } from '@/lib/http'
-import type { PageResponse, ProductResponse, SortableProductField } from '@/types/api'
+import type {
+  CategoryResponse,
+  PageResponse,
+  ProductResponse,
+  SortableProductField,
+} from '@/types/api'
 
 /**
  * The public catalogue. Guest-visible, so it needs no session — which also makes it the first
@@ -36,10 +43,23 @@ const SORT_OPTIONS = [
   label: string
 }[]
 
+const PAGE_SIZE = 24
+
 const listings = ref<ProductResponse[]>([])
 const state = ref<'loading' | 'ready' | 'error'>('loading')
 const errorMessage = ref('')
 const total = ref(0)
+
+const filters = ref(emptyFilters())
+const categories = ref<CategoryResponse[]>([])
+
+/** Separates "nothing matched what you asked for" from "there is nothing here yet". */
+const filtersActive = computed(() => activeCount(filters.value) > 0)
+
+const page = ref(0)
+const totalPages = ref(0)
+const isFirstPage = ref(true)
+const isLastPage = ref(true)
 
 const sortIndex = ref(0)
 /**
@@ -67,11 +87,19 @@ async function load() {
   const { field, direction } = sort.value
 
   try {
-    const page = await api.get<PageResponse<ProductResponse>>('/products', {
-      query: { page: 0, size: 24, sort: `${field},${direction}` },
+    const result = await api.get<PageResponse<ProductResponse>>('/products', {
+      query: {
+        ...toQuery(filters.value),
+        page: page.value,
+        size: PAGE_SIZE,
+        sort: `${field},${direction}`,
+      },
     })
-    listings.value = page.content
-    total.value = page.totalElements
+    listings.value = result.content
+    total.value = result.totalElements
+    totalPages.value = result.totalPages
+    isFirstPage.value = result.first
+    isLastPage.value = result.last
     state.value = 'ready'
     hasLoaded.value = true
   } catch (error) {
@@ -84,8 +112,57 @@ async function load() {
   }
 }
 
-onMounted(load)
-watch(sortIndex, load)
+/**
+ * The category vocabulary for the filter. Guest-readable and unpaged — it is a controlled list
+ * maintained by staff, bounded by how many kinds of boat exist rather than by user activity.
+ *
+ * A failure here is deliberately quiet. It feeds one optional control, and the catalogue itself
+ * is perfectly usable without it; taking the whole page down over a filter would be a worse
+ * answer than simply not offering that filter.
+ */
+async function loadCategories() {
+  try {
+    categories.value = await api.get<CategoryResponse[]>('/categories')
+  } catch {
+    categories.value = []
+  }
+}
+
+/** Anything that changes which listings match sends you back to page one — page 4 of the old
+ *  result set has nothing to do with page 4 of the new one. */
+function reload() {
+  page.value = 0
+  load()
+}
+
+function goToPage(next: number) {
+  page.value = next
+  load()
+  // Straight to the top, not smoothly: a page turn is a repeated action, and animating it makes
+  // the fourth page feel slower than the first for no information gained.
+  window.scrollTo(0, 0)
+}
+
+/**
+ * Filters are debounced; sorting and paging are not. Typing a name is several state changes a
+ * second and each one would be a request, where choosing a sort order is one deliberate act.
+ */
+let pending: ReturnType<typeof setTimeout> | undefined
+watch(
+  filters,
+  () => {
+    clearTimeout(pending)
+    pending = setTimeout(reload, 300)
+  },
+  { deep: true },
+)
+
+watch(sortIndex, reload)
+
+onMounted(() => {
+  load()
+  loadCategories()
+})
 
 /**
  * The API has no currency field on a listing — every price is a bare decimal. Euro is assumed
@@ -133,20 +210,27 @@ function priceLabel(listing: ProductResponse): string {
     </div>
 
     <template v-else>
-      <div class="bar">
-        <span class="count">{{ total }} {{ total === 1 ? 'listing' : 'listings' }}</span>
+      <div class="controls">
+        <FilterPanel v-model="filters" :categories="categories" />
 
-        <span class="sort">
-          <label for="sort">Sort</label>
-          <select id="sort" v-model="sortIndex">
-            <option v-for="(option, index) in SORT_OPTIONS" :key="option.label" :value="index">
-              {{ option.label }}
-            </option>
-          </select>
-        </span>
+        <div class="bar">
+          <span class="count">{{ total }} {{ total === 1 ? 'listing' : 'listings' }}</span>
+
+          <span class="sort">
+            <label for="sort">Sort</label>
+            <select id="sort" v-model="sortIndex">
+              <option v-for="(option, index) in SORT_OPTIONS" :key="option.label" :value="index">
+                {{ option.label }}
+              </option>
+            </select>
+          </span>
+        </div>
       </div>
 
-      <p v-if="listings.length === 0" class="status">
+      <p v-if="listings.length === 0 && filtersActive" class="status">
+        No listings match these filters.
+      </p>
+      <p v-else-if="listings.length === 0" class="status">
         No listings yet. The first one to be published will appear here.
       </p>
 
@@ -170,6 +254,18 @@ function priceLabel(listing: ProductResponse): string {
           </RouterLink>
         </li>
       </ul>
+
+      <!-- Hidden at one page rather than shown disabled: a control that can never do anything is
+           furniture, and this one would sit under every unfiltered catalogue smaller than a page. -->
+      <nav v-if="totalPages > 1" class="pages" aria-label="Pagination">
+        <button type="button" :disabled="isFirstPage || busy" @click="goToPage(page - 1)">
+          Previous
+        </button>
+        <span class="of">Page {{ page + 1 }} of {{ totalPages }}</span>
+        <button type="button" :disabled="isLastPage || busy" @click="goToPage(page + 1)">
+          Next
+        </button>
+      </nav>
     </template>
   </div>
 </template>
@@ -224,17 +320,23 @@ function priceLabel(listing: ProductResponse): string {
   cursor: pointer;
 }
 
-/* The count and the sort control. A hairline under the row separates the controls from the
-   catalogue without drawing a box around either of them. */
+/* Filters on one row, the count and sort order on the next, one hairline under both. Stacked
+   rather than crowded into a single line: the filter panel needs the full width when it opens,
+   and a row that reflows as it does would move the sort control out from under the cursor. */
+.controls {
+  display: grid;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: var(--sp-6);
+}
+
 .bar {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-3) var(--sp-5);
-  padding-bottom: var(--sp-4);
-  border-bottom: 1px solid var(--rule);
-  margin-bottom: var(--sp-6);
   font-size: var(--step--1);
   color: var(--ink-soft);
 }
@@ -274,6 +376,42 @@ function priceLabel(listing: ProductResponse): string {
 .sort select:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
+}
+
+/* Pagination. No transition on any of it — the grid arriving is the answer to the press, and
+   animating a control the user hits repeatedly reads as lag. */
+.pages {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--sp-5);
+  padding: 0 0 var(--sp-8);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+.pages button {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  cursor: pointer;
+  border-bottom: 1px solid var(--rule);
+}
+.pages button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.pages button:disabled {
+  color: var(--ink-faint);
+  border-bottom-color: transparent;
+  cursor: default;
+}
+.pages button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.of {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Re-sorting dims the results it is about to replace. The grid coming back in a new order is
