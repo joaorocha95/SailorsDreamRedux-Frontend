@@ -1,25 +1,36 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import {
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerOverlay,
+  DrawerPortal,
+  DrawerRoot,
+  DrawerTitle,
+  DrawerTrigger,
+} from 'vaul-vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import FilterFields from '@/components/FilterFields.vue'
 import { activeCount, emptyFilters, type BrowseFilters } from '@/lib/browse-filters'
-import type { CategoryResponse, ListingType } from '@/types/api'
+import type { CategoryResponse } from '@/types/api'
 
 /**
- * The browse filters, behind a disclosure.
+ * The browse filters, in whichever container the screen can afford.
  *
- * A disclosure rather than a permanent sidebar because the catalogue is photographic: a column
- * of controls down the side would take roughly a third of the width the images are the point of.
- * Closed by default, and the button carries the count so a narrowed catalogue never looks like an
- * empty one.
+ * Wide: a disclosure under the hero. Not a permanent sidebar — the catalogue is photographic and
+ * a column of controls down the side would take roughly a third of the width the images are the
+ * point of.
  *
- * On a small screen this is the whole story for now. The roadmap's mobile drawer replaces the
- * presentation, not the state — this panel's model is what it will drive.
+ * Narrow: a drawer, because five fields opening inline push the entire catalogue off the screen,
+ * and the visitor loses sight of the thing the filters are meant to be changing.
+ *
+ * Both drive the same `FilterFields`, so only the container differs.
  */
 
 const filters = defineModel<BrowseFilters>({ required: true })
 
 defineProps<{
-  /** Empty until `GET /categories` answers. The control hides rather than offering nothing. */
   categories: CategoryResponse[]
 }>()
 
@@ -27,15 +38,25 @@ const open = ref(false)
 const active = computed(() => activeCount(filters.value))
 
 /**
- * `FOR_SALE` and `FOR_RENT` both match a listing typed `BOTH`; `BOTH` matches only `BOTH`. That
- * asymmetry is deliberate server-side — someone browsing rentals wants to see a boat its owner
- * will either sell or rent — and it is surprising enough to say out loud under the control.
+ * Which container to use. A media query rather than a user-agent guess, and the same 720px the
+ * catalogue grid uses to go two-up — the point at which the fields stop crowding the boats out.
  */
-const LISTING_TYPES: readonly { value: ListingType; label: string }[] = [
-  { value: 'FOR_SALE', label: 'For sale' },
-  { value: 'FOR_RENT', label: 'For rent' },
-  { value: 'BOTH', label: 'Offered both ways' },
-]
+const wide = ref(true)
+let query: MediaQueryList | null = null
+
+function syncWidth(event: MediaQueryList | MediaQueryListEvent) {
+  wide.value = event.matches
+  // Leaving one container should not strand the other holding it open.
+  open.value = false
+}
+
+onMounted(() => {
+  query = window.matchMedia('(min-width: 720px)')
+  syncWidth(query)
+  query.addEventListener('change', syncWidth)
+})
+
+onBeforeUnmount(() => query?.removeEventListener('change', syncWidth))
 
 function clear() {
   filters.value = emptyFilters()
@@ -44,88 +65,61 @@ function clear() {
 
 <template>
   <section class="filters">
-    <button
-      type="button"
-      class="toggle"
-      :aria-expanded="open"
-      aria-controls="filter-fields"
-      @click="open = !open"
-    >
-      Filters<span v-if="active" class="badge">{{ active }}</span>
-    </button>
+    <template v-if="wide">
+      <button
+        type="button"
+        class="toggle"
+        :aria-expanded="open"
+        aria-controls="filter-fields"
+        @click="open = !open"
+      >
+        Filters<span v-if="active" class="badge">{{ active }}</span>
+      </button>
 
-    <button v-if="active" type="button" class="clear" @click="clear">Clear</button>
+      <button v-if="active" type="button" class="clear" @click="clear">Clear</button>
 
-    <!-- v-show, not v-if: closing the panel should not throw away what was typed in it. -->
-    <div v-show="open" id="filter-fields" class="fields">
-      <p class="field">
-        <label for="f-name">Name</label>
-        <input id="f-name" v-model="filters.name" type="search" placeholder="Any" />
-      </p>
+      <!-- v-show, not v-if: closing the panel should not throw away what was typed in it. -->
+      <div v-show="open" id="filter-fields" class="inline-fields">
+        <FilterFields v-model="filters" :categories="categories" />
+      </div>
+    </template>
 
-      <p v-if="categories.length > 0" class="field">
-        <label for="f-category">Category</label>
-        <select id="f-category" v-model="filters.categoryId">
-          <option value="">Any</option>
-          <option v-for="category in categories" :key="category.id" :value="category.id">
-            {{ category.name }}
-          </option>
-        </select>
-      </p>
+    <template v-else>
+      <DrawerRoot v-model:open="open">
+        <DrawerTrigger as-child>
+          <button type="button" class="toggle">
+            Filters<span v-if="active" class="badge">{{ active }}</span>
+          </button>
+        </DrawerTrigger>
 
-      <p class="field">
-        <label for="f-type">Offering</label>
-        <select id="f-type" v-model="filters.listingType">
-          <option value="">Any</option>
-          <option v-for="type in LISTING_TYPES" :key="type.value" :value="type.value">
-            {{ type.label }}
-          </option>
-        </select>
-        <span class="hint">Sale and rent each include boats offered both ways.</span>
-      </p>
+        <DrawerPortal>
+          <DrawerOverlay class="overlay" />
+          <DrawerContent class="sheet" aria-describedby="drawer-note">
+            <!-- The drag handle. Decorative: the sheet is closable by the button below, by the
+                 overlay, and by Escape, so this is an affordance rather than the only way out. -->
+            <div class="grabber" aria-hidden="true"></div>
 
-      <fieldset class="field range">
-        <legend>Sale price</legend>
-        <label class="sr-only" for="f-min-price">Lowest sale price</label>
-        <input
-          id="f-min-price"
-          v-model="filters.minPrice"
-          type="number"
-          min="0"
-          placeholder="No min"
-        />
-        <span aria-hidden="true">–</span>
-        <label class="sr-only" for="f-max-price">Highest sale price</label>
-        <input
-          id="f-max-price"
-          v-model="filters.maxPrice"
-          type="number"
-          min="0"
-          placeholder="No max"
-        />
-      </fieldset>
+            <DrawerTitle class="sheet-title">Filters</DrawerTitle>
+            <DrawerDescription id="drawer-note" class="sheet-note">
+              The catalogue updates as you change these.
+            </DrawerDescription>
 
-      <fieldset class="field range">
-        <legend>Day rate</legend>
-        <label class="sr-only" for="f-min-rate">Lowest day rate</label>
-        <input
-          id="f-min-rate"
-          v-model="filters.minPricePerDay"
-          type="number"
-          min="0"
-          placeholder="No min"
-        />
-        <span aria-hidden="true">–</span>
-        <label class="sr-only" for="f-max-rate">Highest day rate</label>
-        <input
-          id="f-max-rate"
-          v-model="filters.maxPricePerDay"
-          type="number"
-          min="0"
-          placeholder="No max"
-        />
-      </fieldset>
-    </div>
+            <div class="sheet-body">
+              <FilterFields v-model="filters" :categories="categories" />
+            </div>
+
+            <div class="sheet-actions">
+              <button v-if="active" type="button" class="clear" @click="clear">Clear</button>
+              <DrawerClose as-child>
+                <button type="button" class="done">Show results</button>
+              </DrawerClose>
+            </div>
+          </DrawerContent>
+        </DrawerPortal>
+      </DrawerRoot>
+
+      <button v-if="active" type="button" class="clear" @click="clear">Clear</button>
+    </template>
   </section>
 </template>
 
@@ -159,7 +153,8 @@ function clear() {
   transform: scale(0.97);
 }
 .toggle:focus-visible,
-.clear:focus-visible {
+.clear:focus-visible,
+.done:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
@@ -180,86 +175,90 @@ function clear() {
 }
 
 /* Takes the whole row, so the fields open underneath the toggle rather than in a narrow column
-   beside it. auto-fit means the same markup is one column on a phone and four on a desktop. */
-.fields {
+   beside it. */
+.inline-fields {
   flex: 1 1 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: var(--sp-4) var(--sp-5);
   padding: var(--sp-3) 0 var(--sp-2);
 }
 
-.field {
-  display: grid;
+/* --- The drawer ------------------------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(8 19 31 / 45%);
+}
+
+.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 10;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
   gap: var(--sp-2);
-  margin: 0;
-  border: 0;
-  padding: 0;
-  font-size: var(--step--1);
-}
-.field > label,
-.field legend {
-  color: var(--ink-faint);
-  padding: 0;
+  padding: var(--sp-3) var(--sp-5) var(--sp-6);
+  background: var(--surface);
+  border-top: 1px solid var(--rule);
+  border-radius: 12px 12px 0 0;
+  /* The one place --ease-drawer is used. vaul drives the transform while a drag is in flight
+     and hands it back on release; this is the curve it settles on. */
+  transition: transform var(--d-overlay) var(--ease-drawer);
 }
 
-.range {
-  grid-template-columns: 1fr auto 1fr;
-  align-items: baseline;
-  column-gap: var(--sp-2);
-}
-.range legend {
-  grid-column: 1 / -1;
-}
-.range span {
-  color: var(--ink-faint);
+.grabber {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--rule);
+  margin: 0 auto var(--sp-2);
 }
 
-.hint {
-  color: var(--ink-faint);
+.sheet-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--step-2);
+  color: var(--ink);
+}
+.sheet-note {
   font-size: 0.72rem;
-  line-height: 1.35;
+  color: var(--ink-faint);
+  margin-bottom: var(--sp-3);
 }
 
-input,
-select {
+.sheet-body {
+  overflow-y: auto;
+  padding-bottom: var(--sp-4);
+}
+
+.sheet-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--rule-soft);
+}
+
+.done {
   font: inherit;
   font-size: var(--step--1);
-  color: var(--ink);
-  background: transparent;
+  background: var(--ink);
+  color: var(--ground);
   border: 0;
-  border-bottom: 1px solid var(--rule);
-  border-radius: 0;
-  padding: var(--sp-1) 0;
-  min-width: 0;
-  transition: border-color var(--d-press) var(--ease-out);
-}
-input::placeholder {
-  color: var(--ink-faint);
-}
-select {
+  border-radius: 3px;
+  padding: 0.55rem 1.1rem;
   cursor: pointer;
+  margin-left: auto;
+  transition: transform var(--d-press) var(--ease-out);
 }
-@media (hover: hover) and (pointer: fine) {
-  input:hover,
-  select:hover {
-    border-color: var(--ink-faint);
-  }
-}
-input:focus-visible,
-select:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 3px;
+.done:active {
+  transform: scale(0.97);
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    transition-duration: 120ms;
+  }
 }
 </style>

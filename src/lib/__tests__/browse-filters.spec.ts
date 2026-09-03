@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { activeCount, emptyFilters, toQuery } from '../browse-filters'
+import {
+  activeCount,
+  emptyFilters,
+  hasRangeProblem,
+  rangeProblems,
+  toQuery,
+} from '../browse-filters'
 
 /**
  * What matters here is the boundary between "the user left this alone" and "the user asked for
@@ -33,6 +39,41 @@ describe('activeCount', () => {
 
   it('counts a category chosen by id', () => {
     expect(activeCount({ ...emptyFilters(), categoryId: 3 })).toBe(1)
+  })
+})
+
+describe('rangeProblems', () => {
+  it('catches a minimum above its maximum', () => {
+    const filters = { ...emptyFilters(), minPrice: '90000', maxPrice: '40000' }
+    expect(rangeProblems(filters).salePrice).toBe(true)
+    expect(hasRangeProblem(filters)).toBe(true)
+  })
+
+  it('keeps the two ranges independent', () => {
+    // An impossible day rate says nothing about the sale price the visitor also typed.
+    const filters = {
+      ...emptyFilters(),
+      minPrice: '40000',
+      maxPrice: '90000',
+      minPricePerDay: '800',
+      maxPricePerDay: '300',
+    }
+    expect(rangeProblems(filters)).toEqual({ salePrice: false, dayRate: true })
+  })
+
+  it('accepts a single bound, which can never contradict anything', () => {
+    expect(hasRangeProblem({ ...emptyFilters(), minPrice: '90000' })).toBe(false)
+    expect(hasRangeProblem({ ...emptyFilters(), maxPrice: '10' })).toBe(false)
+  })
+
+  it('accepts equal bounds', () => {
+    expect(hasRangeProblem({ ...emptyFilters(), minPrice: '5000', maxPrice: '5000' })).toBe(false)
+  })
+
+  it('holds off while a number is still being typed', () => {
+    // "1e" is mid-keystroke, not a contradiction. Complaining here would flash a message at
+    // someone who is still typing the thing that resolves it.
+    expect(hasRangeProblem({ ...emptyFilters(), minPrice: '1e', maxPrice: '40' })).toBe(false)
   })
 })
 

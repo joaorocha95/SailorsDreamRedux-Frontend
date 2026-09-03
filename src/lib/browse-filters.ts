@@ -45,6 +45,36 @@ export function activeCount(filters: BrowseFilters): number {
 }
 
 /**
+ * Ranges the server would accept and answer with nothing.
+ *
+ * A minimum above its maximum is not a narrow search, it is an impossible one, and the honest
+ * answer is to say so rather than to run it and report "no listings match" — which reads as a
+ * fact about the catalogue when it is really a fact about the question.
+ *
+ * Only a pair where both halves are filled can be wrong; one bound alone is always answerable.
+ */
+export function rangeProblems(filters: BrowseFilters): { salePrice: boolean; dayRate: boolean } {
+  const inverted = (min: string, max: string) => {
+    if (min === '' || max === '') return false
+    const low = Number(min)
+    const high = Number(max)
+    // A half-typed number ("1e", "-") parses to NaN, and NaN is not a contradiction yet.
+    if (!Number.isFinite(low) || !Number.isFinite(high)) return false
+    return low > high
+  }
+
+  return {
+    salePrice: inverted(filters.minPrice, filters.maxPrice),
+    dayRate: inverted(filters.minPricePerDay, filters.maxPricePerDay),
+  }
+}
+
+export function hasRangeProblem(filters: BrowseFilters): boolean {
+  const problems = rangeProblems(filters)
+  return problems.salePrice || problems.dayRate
+}
+
+/**
  * The query parameters for `GET /products`.
  *
  * Empty fields become `undefined` rather than being passed through as empty strings. The HTTP

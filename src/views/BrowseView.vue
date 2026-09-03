@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router'
 
 import FilterPanel from '@/components/FilterPanel.vue'
 import { useAmbience } from '@/lib/ambience'
-import { activeCount, emptyFilters, toQuery } from '@/lib/browse-filters'
+import { activeCount, emptyFilters, hasRangeProblem, toQuery } from '@/lib/browse-filters'
 import { ApiError, api } from '@/lib/http'
 import { priceLabel } from '@/lib/money'
 import type {
@@ -160,6 +160,10 @@ watch(
   filters,
   () => {
     clearTimeout(pending)
+    // An impossible range is not searched. The panel says what is wrong with it, and the
+    // catalogue keeps showing the last answerable result rather than emptying itself — "no
+    // listings match" would read as a fact about the marina instead of about the question.
+    if (hasRangeProblem(filters.value)) return
     pending = setTimeout(reload, 300)
   },
   { deep: true },
