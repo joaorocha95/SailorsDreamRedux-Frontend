@@ -1,0 +1,129 @@
+/* ===================================================================
+   ATELIER — the design tokens.
+   Navy as ink on a near-white ground. Premium through restraint and
+   scale rather than ornament.
+
+   Every colour is defined on bare `:root` first. The dark blocks only
+   redefine tokens; no component rule ever declares a colour inside a
+   media or [data-theme] block, or it would not apply in the default
+   "system" state where nothing is stamped on the root element.
+   =================================================================== */
+
+:root {
+  /* --- Ink ------------------------------------------------------- */
+  --ink: #0f2740; /* headings, primary text, solid buttons */
+  --ink-mid: #2a5878; /* secondary emphasis */
+  --ink-soft: #5b7288; /* body copy on ground, metadata */
+  --ink-faint: #8da0b2; /* placeholders, disabled, units */
+
+  /* --- Surfaces -------------------------------------------------- */
+  --ground: #fbfcfc; /* the page */
+  --surface: #ffffff; /* raised cards, menus */
+  --wash: #f2f5f7; /* image placeholders, inset panels */
+  --rule: #e2e7ea; /* hairlines */
+  --rule-soft: #edf1f3; /* internal dividers */
+
+  /* --- Semantic (separate from the accent, on purpose) ----------- */
+  --positive: #1f6f4a;
+  --caution: #8a6a2f;
+  --critical: #9e3325;
+  --critical-wash: #fbf0ee;
+
+  /* --- Focus ----------------------------------------------------- */
+  --focus: var(--ink);
+
+  /* --- Type ------------------------------------------------------ */
+  --font-display: 'Instrument Serif', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-body: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --step--1: clamp(0.78rem, 0.76rem + 0.1vw, 0.83rem);
+  --step-0: clamp(0.97rem, 0.95rem + 0.12vw, 1.04rem);
+  --step-1: clamp(1.15rem, 1.08rem + 0.3vw, 1.35rem);
+  --step-2: clamp(1.45rem, 1.3rem + 0.7vw, 1.95rem);
+  --step-3: clamp(2rem, 1.7rem + 1.4vw, 3rem);
+  --step-4: clamp(2.6rem, 1.9rem + 3.4vw, 4.9rem);
+
+  /* --- Space ----------------------------------------------------- */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+  --sp-8: 4.5rem;
+
+  --measure: 68ch;
+  --page-max: 1120px;
+
+  /* ===================================================================
+     MOTION
+     The built-in CSS easings are too weak to read as deliberate. Three
+     custom curves cover the whole app.
+     =================================================================== */
+
+  /* Anything entering or exiting. The default. Starts fast, so the
+     interface answers in the frame the user is watching hardest. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Elements moving or morphing on screen. */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* The mobile drawer only — an iOS-like curve. */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Never `ease-in` on UI: it delays the first frame, so the same
+     duration *feels* slower. */
+
+  --d-press: 160ms; /* button feedback */
+  --d-tooltip: 150ms;
+  --d-pop: 200ms; /* dropdowns, popovers */
+  --d-overlay: 280ms; /* modals, drawers */
+  --d-image: 600ms; /* photographic scale — slow on purpose */
+
+  color-scheme: light;
+}
+
+/* Default "system" state: no attribute is stamped, so only the media query separates the two.
+   Guarded so an explicit light choice still beats a dark OS. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ink: #e8eff4;
+    --ink-mid: #9dbbd0;
+    --ink-soft: #8ba3b7;
+    --ink-faint: #6b8096;
+
+    --ground: #08131f;
+    --surface: #0c1b2a;
+    --wash: #102132;
+    --rule: #1e3348;
+    --rule-soft: #182838;
+
+    --positive: #61c295;
+    --caution: #d6ac63;
+    --critical: #e0857a;
+    --critical-wash: #231513;
+
+    color-scheme: dark;
+  }
+}
+
+/* An explicit choice wins in both directions. */
+:root[data-theme='dark'] {
+  --ink: #e8eff4;
+  --ink-mid: #9dbbd0;
+  --ink-soft: #8ba3b7;
+  --ink-faint: #6b8096;
+
+  --ground: #08131f;
+  --surface: #0c1b2a;
+  --wash: #102132;
+  --rule: #1e3348;
+  --rule-soft: #182838;
+
+  --positive: #61c295;
+  --caution: #d6ac63;
+  --critical: #e0857a;
+  --critical-wash: #231513;
+
+  color-scheme: dark;
+}
