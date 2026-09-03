@@ -51,8 +51,12 @@ const money = new Intl.NumberFormat('en-IE', {
 function priceLabel(listing: ProductResponse): string {
   // Which price applies follows from the listing type. A BOTH listing carries both, and the sale
   // price is the headline.
-  if (listing.price) return money.format(Number(listing.price))
-  if (listing.pricePerDay) return `${money.format(Number(listing.pricePerDay))} / day`
+  //
+  // Tested against null rather than for truthiness: these are numbers, so a 0 would read as
+  // "no price" and fall through to the dash. The server rejects a non-positive price, so that
+  // cannot happen today — but the guard should not be the thing standing between us and it.
+  if (listing.price != null) return money.format(listing.price)
+  if (listing.pricePerDay != null) return `${money.format(listing.pricePerDay)} / day`
   return '—'
 }
 </script>

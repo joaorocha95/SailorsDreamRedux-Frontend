@@ -54,10 +54,18 @@ export interface ProductResponse {
   name: string
   description: string
   listingType: ListingType
-  /** Present for FOR_SALE and BOTH. */
-  price: string | null
-  /** Present for FOR_RENT and BOTH. */
-  pricePerDay: string | null
+  /**
+   * Present for FOR_SALE and BOTH.
+   *
+   * A number, not a string. `BigDecimal` serialises as a bare JSON number under Jackson's
+   * defaults, and the backend configures nothing that would change it — its own tests assert
+   * `jsonPath("$.price").value(12000.00)`, which a quoted string would fail. Doubles are exact
+   * for money well past any price this platform will carry, so this is safe to compare and sort
+   * on directly; it would stop being safe if prices ever had to be summed at scale.
+   */
+  price: number | null
+  /** Present for FOR_RENT and BOTH. Same wire type as `price`. */
+  pricePerDay: number | null
   active: boolean
   primaryImageUrl: string | null
   imageUrls: string[] | null
