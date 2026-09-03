@@ -41,6 +41,13 @@ const router = createRouter({
       meta: { guestOnly: true },
     },
 
+    {
+      path: '/account',
+      name: 'account',
+      component: () => import('@/views/AccountView.vue'),
+      meta: { requiresAuth: true },
+    },
+
     // Reachable only while signed in, because reactivating is an authenticated act — which is
     // exactly why a self-deactivated user is allowed to sign in at all.
     {

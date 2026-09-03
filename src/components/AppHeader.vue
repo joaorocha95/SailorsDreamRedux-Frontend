@@ -24,7 +24,7 @@ const { isAuthenticated, user } = storeToRefs(auth)
 
       <div class="account">
         <template v-if="isAuthenticated">
-          <span class="who">{{ user?.name }}</span>
+          <RouterLink :to="{ name: 'account' }" class="who">{{ user?.name }}</RouterLink>
           <button type="button" class="link-btn" @click="auth.logout()">Sign out</button>
         </template>
         <template v-else>
@@ -103,8 +103,16 @@ const { isAuthenticated, user } = storeToRefs(auth)
   font-size: var(--step--1);
 }
 
+/* The name is the way into the account, which is where people look for it. */
 .who {
   color: var(--ink-soft);
+  text-decoration: none;
+  transition: color var(--d-press) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .who:hover {
+    color: var(--ink);
+  }
 }
 
 /* Plain text beside the outlined Sign in: signing up is the less common intent of the two, and
