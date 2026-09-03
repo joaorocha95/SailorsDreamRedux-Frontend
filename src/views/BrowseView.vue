@@ -3,8 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import FilterPanel from '@/components/FilterPanel.vue'
+import { useAmbience } from '@/lib/ambience'
 import { activeCount, emptyFilters, toQuery } from '@/lib/browse-filters'
 import { ApiError, api } from '@/lib/http'
+import { priceLabel } from '@/lib/money'
 import type {
   CategoryResponse,
   PageResponse,
@@ -44,6 +46,12 @@ const SORT_OPTIONS = [
 }[]
 
 const PAGE_SIZE = 24
+
+/**
+ * The harbour ambience lives on this surface only. Scoped to the component, so leaving browse
+ * for a listing or a thread tears the audio graph down rather than following the visitor around.
+ */
+const { enabled: ambienceOn, waitingForGesture, toggle: toggleAmbience } = useAmbience()
 
 const listings = ref<ProductResponse[]>([])
 const state = ref<'loading' | 'ready' | 'error'>('loading')
@@ -163,29 +171,6 @@ onMounted(() => {
   load()
   loadCategories()
 })
-
-/**
- * The API has no currency field on a listing — every price is a bare decimal. Euro is assumed
- * here and should become a real decision before this ships: either a currency column on the
- * product, or a documented single-currency platform.
- */
-const money = new Intl.NumberFormat('en-IE', {
-  style: 'currency',
-  currency: 'EUR',
-  maximumFractionDigits: 0,
-})
-
-function priceLabel(listing: ProductResponse): string {
-  // Which price applies follows from the listing type. A BOTH listing carries both, and the sale
-  // price is the headline.
-  //
-  // Tested against null rather than for truthiness: these are numbers, so a 0 would read as
-  // "no price" and fall through to the dash. The server rejects a non-positive price, so that
-  // cannot happen today — but the guard should not be the thing standing between us and it.
-  if (listing.price != null) return money.format(listing.price)
-  if (listing.pricePerDay != null) return `${money.format(listing.pricePerDay)} / day`
-  return '—'
-}
 </script>
 
 <template>
@@ -196,6 +181,13 @@ function priceLabel(listing: ProductResponse): string {
         Listings from private owners. No brokers, no bidding — just a line straight to whoever is
         holding the keys.
       </p>
+
+      <button type="button" class="ambience" :aria-pressed="ambienceOn" @click="toggleAmbience">
+        <!-- Unlit while the browser is still holding the context suspended, so the light never
+             claims to be playing something that is silent. -->
+        <span class="dot" :class="{ lit: ambienceOn && !waitingForGesture }" aria-hidden="true" />
+        Harbour sound
+      </button>
     </header>
 
     <!-- Loading: a quiet line rather than a skeleton grid. We don't know the result count yet,
@@ -286,6 +278,49 @@ function priceLabel(listing: ProductResponse): string {
   margin-top: var(--sp-4);
   font-size: var(--step-0);
   max-width: 42ch;
+}
+
+/* Quiet on purpose. Offering sound is a courtesy, not a feature to advertise, and anything
+   louder than this would read as the page asking to be allowed to make a noise. */
+.ambience {
+  margin-top: var(--sp-5);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font: inherit;
+  font-size: var(--step--1);
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color var(--d-press) var(--ease-out);
+}
+.ambience:active {
+  transform: scale(0.97);
+}
+.ambience:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.ambience[aria-pressed='true'] {
+  color: var(--ink-soft);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ambience:hover {
+    color: var(--ink);
+  }
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-faint);
+  transition: background-color var(--d-press) var(--ease-out);
+}
+.dot.lit {
+  background: var(--ink-mid);
+  border-color: var(--ink-mid);
 }
 
 .status {
