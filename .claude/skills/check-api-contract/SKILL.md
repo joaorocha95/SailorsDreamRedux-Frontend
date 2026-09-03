@@ -1,7 +1,6 @@
 ---
 name: check-api-contract
-description: Check src/types/api.ts and the client's request handling against the Spring backend it mirrors. Run at the start of a roadmap phase, or after the backend changes.
-disable-model-invocation: true
+description: Check src/types/api.ts and the client's request handling against the Spring backend it mirrors. Use before relying on a DTO or adding a call to a new endpoint, at the start of a roadmap phase, or after the backend changes.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
