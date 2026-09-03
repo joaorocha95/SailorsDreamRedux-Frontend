@@ -77,6 +77,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Replace the cached user with a fresh copy from the server.
+   *
+   * Several endpoints answer with the updated `UserResponse` — reactivate, profile edit, the
+   * avatar upload — and the header is reading this store. Without a way to adopt that response
+   * the app would show a stale name, or an `isActive` that the visitor has just changed.
+   */
+  function setUser(next: UserResponse) {
+    user.value = next
+  }
+
   /** Called by the HTTP layer when any request comes back 401. */
   function clear() {
     user.value = null
@@ -84,5 +95,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   setUnauthorizedHandler(clear)
 
-  return { user, status, isAuthenticated, isAdmin, isDeactivated, bootstrap, login, logout, clear }
+  return {
+    user,
+    status,
+    isAuthenticated,
+    isAdmin,
+    isDeactivated,
+    bootstrap,
+    login,
+    logout,
+    setUser,
+    clear,
+  }
 })

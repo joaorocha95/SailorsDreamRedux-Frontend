@@ -27,7 +27,10 @@ const { isAuthenticated, user } = storeToRefs(auth)
           <span class="who">{{ user?.name }}</span>
           <button type="button" class="link-btn" @click="auth.logout()">Sign out</button>
         </template>
-        <RouterLink v-else :to="{ name: 'login' }" class="signin">Sign in</RouterLink>
+        <template v-else>
+          <RouterLink :to="{ name: 'signup' }" class="signup">Sign up</RouterLink>
+          <RouterLink :to="{ name: 'login' }" class="signin">Sign in</RouterLink>
+        </template>
       </div>
     </div>
   </header>
@@ -102,6 +105,24 @@ const { isAuthenticated, user } = storeToRefs(auth)
 
 .who {
   color: var(--ink-soft);
+}
+
+/* Plain text beside the outlined Sign in: signing up is the less common intent of the two, and
+   two pills competing for the same corner would give neither of them a hierarchy. */
+.signup {
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink-soft);
+  transition: color var(--d-press) var(--ease-out);
+}
+.signup:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) and (pointer: fine) {
+  .signup:hover {
+    color: var(--ink);
+  }
 }
 
 .signin {

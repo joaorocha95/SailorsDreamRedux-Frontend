@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/lib/http'
+import { useRetryAfter } from '@/lib/retry-after'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -19,24 +20,36 @@ const email = ref('')
 const password = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
-/** Set from Retry-After when the signup/login quota refuses us. */
-const retryAfter = ref<number | null>(null)
+
+const { secondsLeft, start: startWait } = useRetryAfter()
+
+const blocked = computed(() => submitting.value || secondsLeft.value > 0)
 
 async function submit() {
   submitting.value = true
   errorMessage.value = ''
-  retryAfter.value = null
 
   try {
     await auth.login({ email: email.value, password: password.value })
+
+    // A deactivated account signs in successfully and stays deactivated. Sending them to the
+    // page they asked for would be a session that quietly refuses everything, so they go to the
+    // one screen that can undo it instead.
+    if (auth.isDeactivated) {
+      await router.replace({ name: 'account-deactivated' })
+      return
+    }
+
     const redirect = route.query.redirect
     await router.replace(typeof redirect === 'string' ? redirect : { name: 'browse' })
   } catch (error) {
     if (error instanceof ApiError) {
       // The server deliberately says the same thing for a wrong password and an unknown address,
-      // so the form must not embellish it into something more specific.
+      // so the form must not embellish it into something more specific. A banned or a closed
+      // account is a different matter: those are distinct 403s with their own wording, and
+      // showing the server's `detail` verbatim is what keeps them distinct.
       errorMessage.value = error.message
-      retryAfter.value = error.retryAfterSeconds
+      startWait(error.retryAfterSeconds)
     } else {
       errorMessage.value = 'Could not reach the server. Try again in a moment.'
     }
@@ -77,13 +90,23 @@ async function submit() {
 
         <p v-if="errorMessage" class="error" role="alert">
           {{ errorMessage }}
-          <span v-if="retryAfter" class="retry-note">Try again in {{ retryAfter }}s.</span>
+          <!-- Counted down rather than left as a flat number, so the wait visibly ends. -->
+          <span v-if="secondsLeft > 0" class="retry-note">
+            You can try again in {{ secondsLeft }}s.
+          </span>
         </p>
 
-        <button type="submit" class="submit" :disabled="submitting">
-          {{ submitting ? 'Signing in…' : 'Sign in' }}
+        <button type="submit" class="submit" :disabled="blocked">
+          <template v-if="secondsLeft > 0">Wait {{ secondsLeft }}s</template>
+          <template v-else-if="submitting">Signing in…</template>
+          <template v-else>Sign in</template>
         </button>
       </form>
+
+      <p class="alt">
+        New here?
+        <RouterLink :to="{ name: 'signup' }">Create an account</RouterLink>
+      </p>
     </div>
   </div>
 </template>
@@ -153,6 +176,13 @@ input:disabled {
   display: block;
   color: var(--ink-soft);
   margin-top: var(--sp-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.alt {
+  margin-top: var(--sp-5);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
 }
 
 .submit {
@@ -172,5 +202,8 @@ input:disabled {
   cursor: default;
   /* The global :active scale would otherwise still fire on a disabled control. */
   transform: none;
+}
+.submit {
+  font-variant-numeric: tabular-nums;
 }
 </style>
