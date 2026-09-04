@@ -157,9 +157,19 @@ onMounted(() => {
         starts from a boat.
       </p>
 
+      <!-- A list, not a table. These rows have four fields and no column a reader would ever want
+           to sort or compare down — the server fixes the order and ignores `?sort=` — so table
+           semantics would promise an interaction that does not exist. -->
       <ul v-else class="threads" :class="{ busy }">
         <li v-for="chat in threads" :key="chat.id">
+          <!-- The whole row is the link, so the target is the size of the row rather than the
+               size of the name. `String(chat.id)` because route params are strings and Vue Router
+               warns about a number here. -->
           <RouterLink :to="{ name: 'thread', params: { id: String(chat.id) } }" class="row">
+            <!-- An em dash while the name is still resolving, rather than a skeleton or a
+                 spinner. The row is already useful without it — the time and the unread count are
+                 what people scan for — and a placeholder that changes width would shift the two
+                 columns beside it when the name lands. -->
             <span class="who">{{ people[counterpartyId(chat, viewerId)] ?? '—' }}</span>
 
             <span class="about">
@@ -167,6 +177,8 @@ onMounted(() => {
               <template v-else>{{ boats[chat.productId] ?? '' }}</template>
             </span>
 
+            <!-- `lastMessageAt` and not `createdAt`: the inbox is ordered by activity, so the
+                 time shown has to be the one it is ordered by or the list looks unsorted. -->
             <span class="when">{{ relativeTime(chat.lastMessageAt) }}</span>
 
             <!-- Per viewer: messages you wrote yourself never count towards this. -->
@@ -263,6 +275,10 @@ onMounted(() => {
 
 /* A row is a line of a ledger, not a card: name, subject, time, count. The vertical rhythm is
    what makes it scannable — a denser list would need rules doing the same work. */
+/* `minmax(0, …)` on both flexible columns, not plain `12rem` and `1fr`. A grid track's default
+   minimum is `auto`, which refuses to shrink below its content — so a long boat name would push
+   the time and the unread count off the row instead of ellipsising. This is what makes
+   `text-overflow` work at all. */
 .row {
   display: grid;
   grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) auto auto;

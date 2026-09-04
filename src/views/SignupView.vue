@@ -83,6 +83,10 @@ async function submit() {
         at all.
       </p>
 
+      <!-- This *replaces* the form rather than appearing above it, which is the whole point of
+           tracking the state separately. The account already exists at this stage, so leaving a
+           filled-in form on screen would invite a second submission — and that one comes back a
+           409 on the email, which reads as "signup failed" to somebody whose signup succeeded. -->
       <div v-if="signedUpButNotIn" class="done" role="status">
         <p><strong>Your account is ready.</strong></p>
         <p>We could not sign you in automatically, but the account exists — sign in as usual.</p>
@@ -90,6 +94,11 @@ async function submit() {
       </div>
 
       <form v-else @submit.prevent="submit">
+        <!-- Every field carries an `autocomplete` token, and they are worth getting right: they
+             are what lets a password manager fill this form and, more importantly, what tells it
+             to *offer to save* the credentials afterwards. `new-password` on the password field is
+             the one that matters most — it is the signal that prompts a generated password rather
+             than an autofill of an existing one. -->
         <label>
           <span>Name</span>
           <input v-model="form.name" type="text" autocomplete="name" required :disabled="blocked" />
@@ -117,6 +126,9 @@ async function submit() {
           />
         </label>
 
+        <!-- `:max` bounds the picker as well as the server. `@Past` would refuse a future date
+             with a 400 anyway, but a picker that offers tomorrow and then argues about it is
+             worse than one that never offered it. -->
         <label>
           <span>Date of birth</span>
           <input
@@ -164,6 +176,9 @@ async function submit() {
 </template>
 
 <style scoped>
+/* Deliberately the same shell, panel, label, input and error treatment as the sign-in form. They
+   are two halves of one task and a visitor moves between them by the links at the foot of each;
+   styling them apart would make that movement feel like leaving the site. */
 .shell {
   display: flex;
   justify-content: center;

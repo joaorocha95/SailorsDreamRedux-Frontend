@@ -10,6 +10,9 @@ import { useAuthStore } from '@/stores/auth'
  * Sign in. Also the first write the app makes, so it is what proves the CSRF handshake works:
  * the token cookie was issued by the `GET /auth/me` during startup, and the HTTP client echoes
  * it back in `X-XSRF-TOKEN`.
+ *
+ * The store owns the request and this owns where you land afterwards, which is the only part with
+ * branching in it: a deactivated account, the page you were sent here from, or browse.
  */
 
 const auth = useAuthStore()
@@ -23,6 +26,11 @@ const errorMessage = ref('')
 
 const { secondsLeft, start: startWait } = useRetryAfter()
 
+/**
+ * One flag for the button, covering both reasons it should not be pressable — a request already
+ * in flight, and a rate limit that has not expired. Two conditions, one control: the alternative
+ * is a `:disabled` expression that has to be kept in step with the label below it.
+ */
 const blocked = computed(() => submitting.value || secondsLeft.value > 0)
 
 async function submit() {
@@ -65,7 +73,13 @@ async function submit() {
       <h1>Sign in</h1>
       <p class="lede">To message an owner, save a listing, or publish one of your own.</p>
 
+      <!-- `.prevent` because this is a real <form> and not a button with a click handler: that is
+           what makes Enter submit from either field, and what lets the browser's own required-field
+           and email-shape checks run before anything is sent. -->
       <form @submit.prevent="submit">
+        <!-- The label wraps its input rather than pairing by `for`/`id`. That associates them
+             implicitly, which is both valid and immune to the duplicate-id problem a second form
+             on the same page would otherwise create. -->
         <label>
           <span>Email</span>
           <input
@@ -88,6 +102,9 @@ async function submit() {
           />
         </label>
 
+        <!-- `role="alert"` rather than a plain paragraph: the failure arrives asynchronously and
+             well below where the eye is, so it has to announce itself. Inserted rather than
+             toggled, which is what makes an assertive live region actually fire. -->
         <p v-if="errorMessage" class="error" role="alert">
           {{ errorMessage }}
           <!-- Counted down rather than left as a flat number, so the wait visibly ends. -->
@@ -112,6 +129,8 @@ async function submit() {
 </template>
 
 <style scoped>
+/* A centred column rather than the two-column page grid the rest of the app uses. A form with two
+   fields does not want 1120px of width — the measure is what makes it look considered. */
 .shell {
   display: flex;
   justify-content: center;
@@ -151,6 +170,9 @@ label span {
   color: var(--ink-soft);
 }
 
+/* Only `border-color` transitions on focus. The focus ring itself comes from the global
+   `:focus-visible` rule, so it appears instantly for a keyboard user while the border warms up —
+   which is the right way round, since the ring is the accessibility affordance. */
 input {
   background: var(--surface);
   border: 1px solid var(--rule);
@@ -196,14 +218,15 @@ input:disabled {
   text-transform: uppercase;
   cursor: pointer;
   margin-top: var(--sp-2);
+  /* For the "Wait 12s" countdown the button shows after a 429. Proportional digits are different
+     widths, so without this the button would visibly twitch once a second while it counted down.
+     (Merged here from a second `.submit` block that used to sit at the foot of this file.) */
+  font-variant-numeric: tabular-nums;
 }
 .submit:disabled {
   background: var(--ink-faint);
   cursor: default;
   /* The global :active scale would otherwise still fire on a disabled control. */
   transform: none;
-}
-.submit {
-  font-variant-numeric: tabular-nums;
 }
 </style>

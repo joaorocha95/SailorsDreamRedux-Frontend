@@ -20,6 +20,11 @@ import type { UserResponse } from '@/types/api'
  *
  * The three account actions are deliberately laid out in order of severity, and separated: a
  * reversible switch, then an irreversible one behind a typed confirmation.
+ *
+ * Four unrelated jobs share this page — details, photograph, blocked people, switching off — and
+ * they are four `<section>`s rather than four routes because each is a handful of controls that
+ * somebody reaches for once a year. The ordering is the argument: the things you might change
+ * today are at the top, and the two that end your account are at the bottom, past everything else.
  */
 
 const auth = useAuthStore()
@@ -43,6 +48,13 @@ const closing = ref(false)
 const closeConfirmation = ref('')
 const dangerError = ref('')
 
+/**
+ * Whether anything has actually been typed, so an untouched form cannot spend a request.
+ *
+ * Compared against the store rather than a snapshot taken at mount: the store is what the avatar
+ * upload and the reactivation flow also write to, so this stays correct when the user is replaced
+ * by something other than this form.
+ */
 const dirty = computed(
   () => name.value !== auth.user?.name || phoneNumber.value !== auth.user?.phoneNumber,
 )
@@ -50,6 +62,14 @@ const dirty = computed(
 /** Typing the word is the confirmation. Nothing irreversible happens on a single click. */
 const closeArmed = computed(() => closeConfirmation.value.trim().toUpperCase() === 'CLOSE')
 
+/**
+ * One line of error handling, shared by all six actions on this page.
+ *
+ * An `ApiError` already carries the server's `detail`, which is written to be read by a person, so
+ * it is shown as-is. Anything else is not an answer from the API at all — a dead connection, a
+ * proxy that returned HTML — and gets copy that says so rather than leaking a `TypeError` into
+ * the interface.
+ */
 function describe(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback
 }
@@ -121,6 +141,9 @@ async function removePicture() {
 
   try {
     await api.delete<void>(`/users/${auth.user.id}/profile-picture`)
+    // The DELETE answers 204 with no body, unlike the upload which hands back the whole user. So
+    // the one field that changed is patched onto the cached copy rather than refetching — a
+    // second round trip to learn something we already know.
     auth.setUser({ ...auth.user, profilePictureUrl: null })
   } catch (error) {
     pictureError.value = describe(error, 'Could not reach the server. Try again in a moment.')
@@ -129,6 +152,13 @@ async function removePicture() {
   }
 }
 
+/**
+ * The reversible one. Deactivating hides the account and unpublishes its listings, and the owner
+ * can undo it themselves — which is exactly why a deactivated user is still allowed to sign in.
+ *
+ * They are sent to the screen that undoes it rather than left here, because a session that
+ * silently refuses every write is a worse place to be than one screen that explains itself.
+ */
 async function deactivate() {
   if (!auth.user) return
 
@@ -146,6 +176,13 @@ async function deactivate() {
   }
 }
 
+/**
+ * The one that cannot be undone. The server tombstones the row: neither reactivate nor unban will
+ * reopen it, and every other state change on a closed account is a 409 rather than a no-op.
+ *
+ * Guarded twice — by the typed word and by re-checking it here — because the check that matters is
+ * the one nearest the request, not the one on the button.
+ */
 async function closeAccount() {
   if (!auth.user || !closeArmed.value) return
 
@@ -160,6 +197,9 @@ async function closeAccount() {
     await router.replace({ name: 'browse' })
   } catch (error) {
     dangerError.value = describe(error, 'Could not reach the server. Try again in a moment.')
+    // Reset only on failure, deliberately — there is no `finally` here. On success this component
+    // is being navigated away from, and clearing the flag would flash the button back to
+    // "Close account" for one frame on a page that no longer has an account behind it.
     closing.value = false
   }
 }
@@ -178,6 +218,10 @@ const blockedNames = ref<Record<number, string>>({})
 const unblocking = ref<number | null>(null)
 const blockError = ref('')
 
+/**
+ * Names for the blocked ids, filled in after the rows are on screen — the same memoised lookup an
+ * inbox row uses, so somebody blocked from two places is fetched once.
+ */
 async function loadBlockedNames() {
   await Promise.all(
     blocks.blocks.map(async (block) => {
@@ -321,6 +365,14 @@ onMounted(async () => {
       <p v-if="blockError" class="error" role="alert">{{ blockError }}</p>
     </section>
 
+    <!--
+      Last on the page, and the two options in order of severity with the reversible one first.
+      That ordering is the argument: somebody who only wants a break should meet deactivation
+      before they meet closure, and both notes say plainly which of the two they are reading.
+
+      Neither is a modal. A confirmation dialogue would let this be dismissed and forgotten
+      halfway through, and the typed word below does the same job without taking the page away.
+    -->
     <section class="block danger">
       <h2>Switching off</h2>
 
@@ -344,11 +396,22 @@ onMounted(async () => {
           break, deactivate instead.
         </p>
 
+        <!--
+          Typing the word, not a second click. This is the only irreversible action in the app,
+          and the gap between "I pressed something" and "I wrote the word CLOSE" is the whole
+          protection: a mis-click cannot produce it, and neither can a click on the wrong row.
+
+          `autocomplete="off"` because a browser offering to fill this in would defeat it
+          entirely.
+        -->
         <label class="confirm">
           <span>Type CLOSE to confirm</span>
           <input v-model="closeConfirmation" type="text" autocomplete="off" :disabled="closing" />
         </label>
 
+        <!-- Disabled until the word matches, so the control is inert rather than merely refusing
+             when pressed. `type="button"` on both, since neither sits in a form and a stray
+             submit is not a thing that should be possible here. -->
         <button
           type="button"
           class="destructive"

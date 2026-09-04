@@ -4,6 +4,21 @@ import { storeToRefs } from 'pinia'
 
 import { useAuthStore } from '@/stores/auth'
 
+/**
+ * The masthead, on every page including the error ones.
+ *
+ * It is the only component that reads the session directly rather than being told about it, and
+ * that is deliberate: the nav *is* a picture of who you are, so it should change the instant the
+ * store does. `storeToRefs` is what preserves that — destructuring a Pinia store plainly would
+ * copy the values out and the header would be frozen at whatever the session was when it mounted.
+ *
+ * `auth` itself is kept undestructured for `auth.logout()`, because actions do not need
+ * unwrapping and `storeToRefs` deliberately does not return them.
+ *
+ * There is no unread badge on Messages, and that is a decision rather than an omission: a count
+ * in the masthead would need its own poller running on every page in the app, where the inbox and
+ * the thread each already poll only while they are open.
+ */
 const auth = useAuthStore()
 const { isAdmin, isAuthenticated, user } = storeToRefs(auth)
 </script>
@@ -13,8 +28,13 @@ const { isAdmin, isAuthenticated, user } = storeToRefs(auth)
     <div class="page inner">
       <RouterLink :to="{ name: 'browse' }" class="mark">Sailor's Dream</RouterLink>
 
+      <!-- Named, because a page can hold several navigations — the admin strip is another — and
+           "Main" is what tells them apart in a screen reader's landmark list. -->
       <nav class="links" aria-label="Main">
         <RouterLink :to="{ name: 'browse' }">Browse</RouterLink>
+        <!-- Hidden rather than disabled for a guest. Every one of these routes is behind
+             `requiresAuth`, so showing them would be offering four links that bounce to the login
+             form — and the two buttons on the right already say what to do about that. -->
         <template v-if="isAuthenticated">
           <RouterLink :to="{ name: 'selling' }">Selling</RouterLink>
           <RouterLink :to="{ name: 'inbox' }">Messages</RouterLink>
@@ -27,6 +47,8 @@ const { isAdmin, isAuthenticated, user } = storeToRefs(auth)
 
       <div class="account">
         <template v-if="isAuthenticated">
+          <!-- The name is the way into the account. People look for their own name first, and a
+               separate "Account" link beside it would be two words for one destination. -->
           <RouterLink :to="{ name: 'account' }" class="who">{{ user?.name }}</RouterLink>
           <button type="button" class="link-btn" @click="auth.logout()">Sign out</button>
         </template>
@@ -45,6 +67,8 @@ const { isAdmin, isAuthenticated, user } = storeToRefs(auth)
   background: var(--ground);
 }
 
+/* `.page` supplies the max-width and the horizontal gutter; this only adds the vertical rhythm
+   and the row layout, so the masthead lines up with the content under it on every page. */
 .inner {
   display: flex;
   align-items: center;
@@ -61,6 +85,8 @@ const { isAdmin, isAuthenticated, user } = storeToRefs(auth)
   white-space: nowrap;
 }
 
+/* `margin-left: auto` pushes the nav and everything after it to the right, which is what leaves
+   the wordmark alone on the left without needing a spacer element between them. */
 .links {
   display: flex;
   gap: var(--sp-5);
@@ -94,6 +120,8 @@ const { isAdmin, isAuthenticated, user } = storeToRefs(auth)
   }
 }
 
+/* `router-link-active` matches on prefix, so /messages/1 keeps Messages lit while you are reading
+   a thread — which is the behaviour you want, since a thread *is* somewhere inside Messages. */
 .links a.router-link-active {
   color: var(--ink);
   border-bottom-color: var(--ink);
@@ -173,6 +201,10 @@ const { isAdmin, isAuthenticated, user } = storeToRefs(auth)
   }
 }
 
+/* Below this the five nav items and the account block cannot share a row without wrapping into
+   something worse than either. The nav goes rather than the account block: signing out and
+   reaching your own account are the two things you cannot get to any other way, where every nav
+   destination is also reachable from the page you are on. */
 @media (max-width: 640px) {
   .links {
     display: none;

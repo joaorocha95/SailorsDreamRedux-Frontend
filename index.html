@@ -1,12 +1,36 @@
-<!DOCTYPE html>
-<html lang="">
+<!doctype html>
+<!--
+  The single page the whole client is served from.
+
+  `lang` is not decorative: a screen reader picks its pronunciation rules from it, and an empty
+  value — which is what the Vite scaffold ships — leaves that to a guess. The copy here is English,
+  so it says so.
+-->
+<html lang="en">
   <head>
-    <meta charset="UTF-8">
-    <link rel="icon" href="/favicon.ico">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vite App</title>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" />
+
+    <!--
+      Required for the fluid type scale to mean anything. Every `--step-*` token is a `clamp()`
+      against the viewport width, and without this meta a phone reports a ~980px viewport and
+      renders the desktop layout shrunk to fit.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      The tab title, and the name a bookmark takes.
+
+      NOTE: the three typefaces the design rests on — Instrument Serif, DM Sans, JetBrains Mono —
+      are declared in `tokens.css` but never actually loaded, here or anywhere else. Every one of
+      them currently falls through to its fallback (Georgia, system-ui, Consolas). See the README.
+    -->
+    <title>Sailor's Dream</title>
   </head>
   <body>
+    <!-- Vue mounts here; see `src/main.ts`. Empty on purpose — there is no server-rendered shell,
+         so this file is the same three lines whatever page the visitor asked for, and the router
+         decides the rest on the client. -->
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

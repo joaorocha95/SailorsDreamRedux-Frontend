@@ -31,6 +31,15 @@ const search = ref('')
 const working = ref<number | null>(null)
 const rowError = ref('')
 
+/**
+ * The search, over what is already loaded rather than over the server.
+ *
+ * `GET /users` is unpaged — the whole table in one response — so there is nothing to query
+ * against; filtering in memory is the only option the endpoint leaves. Name *and* email, because
+ * staff acting on a report have one or the other and rarely both.
+ *
+ * This is the page that breaks first if the platform grows. See item 10 on the roadmap's list.
+ */
 const matches = computed(() => {
   const needle = search.value.trim().toLowerCase()
   if (needle === '') return users.value
@@ -100,6 +109,9 @@ onMounted(load)
     </div>
 
     <template v-else>
+      <!-- Labelled but not visibly: the placeholder repeats it, and a work queue is a page where
+           the vertical space matters more than on any other. The label still has to exist, since a
+           placeholder disappears the moment anything is typed into it. -->
       <label class="sr-only" for="user-search">Search by name or email</label>
       <input
         id="user-search"
@@ -109,6 +121,9 @@ onMounted(load)
         placeholder="Search by name or email"
       />
 
+      <!-- Deliberately *not* a live region, unlike the counts on browse and the report queue.
+           This one changes on every keystroke, where those change on a debounce or a deliberate
+           press — announcing it would talk over the typing it is reporting on. -->
       <p class="count">
         {{ matches.length }} of {{ users.length }} account{{ users.length === 1 ? '' : 's' }}
       </p>
@@ -128,6 +143,10 @@ onMounted(load)
             <p class="email">{{ user.email }}</p>
           </div>
 
+          <!-- One word, because one word is all the API offers. `isActive` is a single boolean
+               over three separate flags — deactivated, banned, closed — so this can say whether an
+               account is usable and never why. The lede above says so plainly rather than letting
+               a moderator infer a reason that is not there. -->
           <span class="state" :class="{ off: !user.isActive }">
             {{ user.isActive ? 'active' : 'not active' }}
           </span>

@@ -59,9 +59,23 @@ const LISTING_TYPES: readonly { value: ListingType; label: string }[] = [
           {{ type.label }}
         </option>
       </select>
+      <!-- Said under the control because the behaviour is surprising in a way that would
+           otherwise read as a bug: filtering for rentals returns boats whose type is BOTH. -->
       <span class="hint">Sale and rent each include boats offered both ways.</span>
     </p>
 
+    <!--
+      A `<fieldset>` with a `<legend>`, and not for decoration: the legend is what a screen reader
+      prefixes onto each field inside it, so "Lowest" and "Highest" are heard as belonging to Sale
+      price rather than floating free beside three other numbers.
+
+      The visible labels are `sr-only` because the legend and the placeholders already say it on
+      screen — the two inputs read as a range because they sit either side of a dash. That reading
+      is purely visual, which is exactly why the hidden labels have to exist.
+
+      Two separate ranges, never one slider: a sale price and a day rate are different quantities,
+      and each pair also excludes listings whose column is null for free. See `browse-filters.ts`.
+    -->
     <fieldset class="field range">
       <legend>Sale price</legend>
       <label class="sr-only" for="f-min-price">Lowest sale price</label>
@@ -72,6 +86,8 @@ const LISTING_TYPES: readonly { value: ListingType; label: string }[] = [
         min="0"
         placeholder="No min"
       />
+      <!-- Decorative: the dash is how the pair reads as a range on screen, and announcing "en
+           dash" between two numbers tells a listener nothing the labels have not already said. -->
       <span aria-hidden="true">–</span>
       <label class="sr-only" for="f-max-price">Highest sale price</label>
       <input
@@ -81,6 +97,9 @@ const LISTING_TYPES: readonly { value: ListingType; label: string }[] = [
         min="0"
         placeholder="No max"
       />
+      <!-- An impossible range is answered here rather than by running the search and returning
+           nothing: "no listings match" reads as a fact about the marina when it is a fact about
+           the question. `BrowseView` also declines to send it. -->
       <p v-if="problems.salePrice" class="problem" role="alert">
         The lowest price is above the highest.
       </p>
