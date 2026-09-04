@@ -1,7 +1,10 @@
 # sailors-dream-redux-frontend
 
 The Vue 3 client for the Sailor's Dream API — a marketplace for boats where the funnel ends in a
-negotiation rather than a checkout. What is built and what is next is in [ROADMAP.md](ROADMAP.md).
+negotiation rather than a checkout.
+
+- [ROADMAP.md](ROADMAP.md) — what was built, and the reasoning behind each decision.
+- [TODO.md](TODO.md) — what is left, by part of the project. Most of it belongs to the API.
 
 ## Running it against the real API
 

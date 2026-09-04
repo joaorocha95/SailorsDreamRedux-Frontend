@@ -168,7 +168,7 @@ deliberately not gated on ever having negotiated.
 - [x] Report, with the reason enum and optional detail — **1000** characters here, not the 255
       nearly every other text field carries.
 - [x] One unreviewed report per pair, explained rather than shown raw. The single place in this
-      client where the server's `detail` is deliberately not surfaced; see the list below for why.
+      client where the server's `detail` is deliberately not surfaced; see TODO.md §2.4 for why.
 - [x] **A blocked list on the account page**, which phase 6 did not list and needed. Blocking
       removes the conversation from *both* inboxes, so without somewhere to undo it the only route
       back would be a bookmarked thread URL — an easily-reversible act would be permanent in
@@ -191,8 +191,8 @@ audience and nothing else.
 - [x] Ban/unban; user directory. **Both verbs, not a toggle** — see below.
 - [ ] **Telling banned from deactivated from closed.** `isActive` is one boolean over three flags,
       and the DTO left them un-broken-out "until [there is] an admin surface to show it on". This
-      is that surface, so a row can say *whether* an account is usable and never *why*. Item 9 on
-      the list below.
+      is that surface, so a row can say *whether* an account is usable and never *why*. See
+      TODO.md §2.2.
 
 `GET /users` is unpaged, so the directory's search filters what is already loaded rather than
 querying. Fine at this size, wrong at a real one — the first thing to change if the platform grows.
@@ -223,7 +223,7 @@ in a diff.
 - [ ] Production build served same-origin — **the server half.** Copying `dist/` into the
       backend's static resources and asking for `/` returns **401**: the SPA shell is behind
       `anyRequest().authenticated()`, and there is no fallback route, so every client-side URL
-      (`/messages/1`, `/listings/2`) is a 401 too. Item 13 below.
+      (`/messages/1`, `/listings/2`) is a 401 too. See TODO.md §2.1.
 
 - [x] **The typefaces.** All three were declared in `tokens.css` and never loaded — no `<link>`,
       no `@font-face`, no files — so the app rendered in Georgia, system-ui and Consolas from
@@ -244,7 +244,7 @@ in a diff.
 
 Not attempted: reduced motion could not be *emulated* in the browser pane, so that fix is verified
 by reading the cascade rather than by watching it. Nothing image-shaped was checked at all — see
-item 11.
+TODO.md §2.2.
 
 ---
 
@@ -277,78 +277,13 @@ centred; only `transform` and `opacity`; gate hover behind
 
 ## What the API cannot do yet
 
-Roadmap items with no endpoint behind them, plus the places where the shape that exists makes the
-client guess. Each is a small backend change; none can be worked around from this side, and each is
-listed with what would unblock it.
+Fourteen gaps in the Spring backend, each blocking something on this side and none of them
+workaroundable from here. **The list lives in [TODO.md](TODO.md) §2**, grouped by what it blocks
+rather than by discovery order, with what would unblock each one.
 
-1. **No unpublish.** `PATCH /products/{id}/activate` only sets `active = true`, and the only way
-   down is `DELETE`, which soft-deletes with nothing to undo it. A seller who wants a listing off
-   browse for a fortnight has to destroy it. *Needs:* a deactivate verb, or `active` on
-   `UpdateProductRequest`.
-2. **No way to name an existing photograph.** Deleting one needs an image id; ids come back only
-   from the upload response, and the gallery arrives as bare URLs on the detail shape. So a
-   picture added last week can be seen and not removed. *Needs:* `GET /products/{id}/images`, or
-   ids alongside the URLs on the detail response.
-3. **No image reorder.** Position is assigned on append and nothing changes it, so the cover photo
-   is whichever went up first. *Needs:* a position endpoint. Worth having after (2), since a
-   reorder UI needs ids for the same reason a delete does.
-4. **Descending price sorts are unsafe.** Nothing pins where nulls land, and Postgres puts them
-   first descending — so "price, high to low" would open with every rent-only listing. *Needs:*
-   `NULLS LAST` on the descending case, the same trap `ChatRepository` already dodges by
-   coalescing. Then add the two options to `SORT_OPTIONS`.
-5. **An inbox row cannot name anything.** `ChatResponse` is ids only, so the client resolves the
-   counterparty and the listing itself (`src/lib/directory.ts`, memoised per session). Sound
-   reasoning on the server — nesting the user would leak a password hash — but the shape leaves a
-   row with nothing a person recognises. *Needs:* `counterpartyName` and `productName` on the
-   summary, at which point that file can be deleted.
-6. **Reviews cannot be read at all.** `POST /reviews` is the whole feature — no received reviews,
-   no aggregate rating, no way to ask whether you have already reviewed somebody. Two consequences:
-   the "one per direction per pair" gate can only be guessed at from a `localStorage` memo, and
-   **a profile page is unbuildable**, since the two things it would exist to show are the two that
-   do not exist. *Needs:* `GET /users/{id}/reviews` and a rating on `UserResponse`.
-7. **The wishlist does not filter withdrawn listings.** `findWishlistOf` has no `deleted` clause,
-   so a saved card can point at a boat whose detail page 404s, and nothing on the browse shape says
-   which. *Needs:* the same `not deleted` filter every other read path has — or, if keeping the row
-   is deliberate, a flag saying so.
-8. **Three refusals are written for a log, not a person.** "User 3 has already reviewed user 7",
-   the never-negotiated message, and "User 3 already has an unreviewed report against user 7" all
-   reach the person who just filled in the form, because `detail` is what the client shows.
-   Everywhere else in this API that copy is good. The report one is worked around — it is the only
-   `detail` this client suppresses, replaced with written copy — which is a patch over a string,
-   and it will drift. *Needs:* names, or second-person phrasing.
-
-9. **An admin cannot see why an account is off.** `UserResponse.isActive` collapses deactivated,
-   banned and closed into one boolean — deliberately, and the DTO comment says the distinction
-   "gets added" once an admin surface exists. It exists now. The staff directory offers Ban and
-   Unban side by side because a toggle would have to guess which state a row is in. *Needs:* the
-   three flags, or a status enum, on `UserResponse` — or a separate admin-only shape, if telling
-   every caller who has been banned is the thing being avoided.
-10. **`GET /users` is unpaged.** The whole table in one response, so the directory searches what it
-    already holds. Bounded by how many accounts exist, which is the one collection here that has no
-    natural ceiling. *Needs:* a `PageResponse` and a `?name=` filter, the same shape browse has.
-11. **Uploaded images are unreachable in the default store.** `InMemoryImageStore` keeps bytes in
-    a map and hands out `http://localhost:8080/local-images/<key>`, but nothing serves that path —
-    no resource handler — and `anyRequest().authenticated()` answers **401** for it besides. The
-    URL is absolute, so it bypasses the dev proxy too. Uploads succeed and nothing renders, which
-    means the browse cards, the gallery, avatars and the photo manager cannot be checked locally
-    at all. *Needs:* a resource handler plus a `permitAll` for the path — or an honest admission
-    that `memory` is test-only and dev should run `oci`.
-12. **No bootstrap path.** `accountType` is never settable through the API, so the first admin is
-    made with SQL; and nothing can be listed until a category exists, which only an admin can
-    create. A fresh database therefore cannot reach a usable state without a hand-written UPDATE.
-    *Needs:* a seed profile, or a first-run rule that promotes the first account.
-13. **The SPA cannot be served same-origin yet.** `/` returns 401 — the shell is behind
-    `anyRequest().authenticated()` — and there is no SPA fallback, so a deep link is a 401 rather
-    than index.html. *Needs:* `permitAll` for `/`, `/index.html`, `/assets/**` and `/favicon.ico`,
-    plus a forward for unmatched non-API paths that does **not** swallow the API's own 404s. Until
-    then the only way to run this is the dev proxy, which the roadmap is explicit is not a
-    deployment.
-14. **Not every error is a `ProblemDetail`.** A malformed request body raises
-    `HttpMessageNotReadableException`, which `GlobalExceptionHandler` does not handle, so the
-    client gets Spring's default error shape — `timestamp`/`error`/`path`, no `detail` — **with a
-    full stack trace in it**. `ApiError` degrades to "Request failed with status 400", which is
-    survivable; the stack trace reaching a browser is less so. *Needs:* a handler for it, and
-    `server.error.include-stacktrace: never`.
+It moved there so it exists once. A roadmap records what was built; a list of what is missing
+belongs with the other things that are missing, and two copies of it would disagree inside a month
+— which is exactly how this file came to announce phase 1 as next, four phases later.
 
 ## Open questions
 
@@ -380,5 +315,5 @@ listed with what would unblock it.
   zoneless with **microsecond** precision (`2026-09-04T23:03:31.664586`), which `new Date()` parses
   as local time without complaint; and the `XSRF-TOKEN` / `JSESSIONID` pair survives the Vite
   proxy, with `GET /auth/me` answering 401 for a signed-out visitor as the auth store expects.
-  What has **not** been exercised is anything image-shaped — see item 11 — and no screen has been
+  What has **not** been exercised is anything image-shaped — see TODO.md §2.2 — and no screen has been
   driven through a browser yet, only the wire. See [README.md](README.md) for how to run it.
