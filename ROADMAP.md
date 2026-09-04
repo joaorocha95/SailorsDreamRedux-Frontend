@@ -155,16 +155,34 @@ Two features that look alike from the outside and are shaped by opposite facts a
       it changes: an unpublished one is marked rather than hidden, and a *withdrawn* one cannot be
       detected at all, so it falls through to the listing page's "no longer listed" screen.
 
-## Phase 6 — Safety &nbsp;·&nbsp; next
+## Phase 6 — Safety &nbsp;·&nbsp; done (`1bc5b56`)
 
-The thread already has an actions strip sized for these two, and `GET /blocks` is wired for the
-blocked-thread state.
+Two controls that sit next to each other and are not the same kind of thing. **Blocking is between
+the two of you** — idempotent, reversible, and the one action with no retirement gate on either
+side, because every other gate guards something that publishes into the platform and blocking
+publishes nothing. **Reporting is a private message to staff** — rate-limited, not retractable, and
+deliberately not gated on ever having negotiated.
 
-- [ ] Block and unblock from a thread or a profile.
-- [ ] Report, with the reason enum and optional detail. One unreviewed report per pair, so explain
-      the refusal rather than showing a raw 400.
+- [x] Block and unblock, from a thread **and from a listing**. Not from a profile: there is no
+      profile page, and there cannot be one until reviews can be read.
+- [x] Report, with the reason enum and optional detail — **1000** characters here, not the 255
+      nearly every other text field carries.
+- [x] One unreviewed report per pair, explained rather than shown raw. The single place in this
+      client where the server's `detail` is deliberately not surfaced; see the list below for why.
+- [x] **A blocked list on the account page**, which phase 6 did not list and needed. Blocking
+      removes the conversation from *both* inboxes, so without somewhere to undo it the only route
+      back would be a bookmarked thread URL — an easily-reversible act would be permanent in
+      practice.
 
-## Phase 7 — Admin
+Neither control is behind a confirmation, deliberately: a safety control that asks twice is one
+somebody being harassed has to fight through, and blocking is undone by the button that replaces
+it.
+
+## Phase 7 — Admin &nbsp;·&nbsp; next
+
+`GET /reports` and `PATCH /reports/{id}/reviewed` are ADMIN-only in `SecurityConfig`, so this is
+the first phase where the client needs a tier check rather than just a session. `ReportResponse` is
+already mirrored.
 
 Can be plain. Nobody needs it to be beautiful.
 
@@ -245,10 +263,12 @@ listed with what would unblock it.
    so a saved card can point at a boat whose detail page 404s, and nothing on the browse shape says
    which. *Needs:* the same `not deleted` filter every other read path has — or, if keeping the row
    is deliberate, a flag saying so.
-8. **Two review refusals are written for a log, not a person.** "User 3 has already reviewed user
-   7" and the never-negotiated message both reach the person who just filled in the form, because
-   `detail` is what the client shows. Everywhere else in this API that copy is good. *Needs:* names,
-   or second-person phrasing.
+8. **Three refusals are written for a log, not a person.** "User 3 has already reviewed user 7",
+   the never-negotiated message, and "User 3 already has an unreviewed report against user 7" all
+   reach the person who just filled in the form, because `detail` is what the client shows.
+   Everywhere else in this API that copy is good. The report one is worked around — it is the only
+   `detail` this client suppresses, replaced with written copy — which is a patch over a string,
+   and it will drift. *Needs:* names, or second-person phrasing.
 
 ## Open questions
 
