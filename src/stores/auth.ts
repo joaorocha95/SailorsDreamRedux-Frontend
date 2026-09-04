@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
+import { clearDirectory } from '@/lib/directory'
 import { ApiError, api, setUnauthorizedHandler } from '@/lib/http'
 import type { LoginRequest, UserResponse } from '@/types/api'
 
@@ -73,7 +74,7 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       // Clear locally whatever the server said. A logout that failed still means the user asked
       // to be signed out, and leaving them looking signed in is the worse outcome.
-      user.value = null
+      clear()
     }
   }
 
@@ -88,9 +89,12 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = next
   }
 
-  /** Called by the HTTP layer when any request comes back 401. */
+  /** Called by the HTTP layer when any request comes back 401, and by `logout`. */
   function clear() {
     user.value = null
+    // The names an inbox resolved belong to that session. The next person at this browser is
+    // not necessarily the same one, and a cache is not a place to leave them.
+    clearDirectory()
   }
 
   setUnauthorizedHandler(clear)

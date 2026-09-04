@@ -42,6 +42,24 @@ const router = createRouter({
     },
 
     {
+      path: '/messages',
+      name: 'inbox',
+      component: () => import('@/views/InboxView.vue'),
+      meta: { requiresAuth: true },
+    },
+
+    // A thread survives things its inbox row does not: a block hides it from both inboxes while
+    // leaving `GET /chats/{id}` working, so this route has to resolve for a bookmarked URL that
+    // no longer appears in any list. The view designs that state rather than treating it as a 404.
+    {
+      path: '/messages/:id',
+      name: 'thread',
+      component: () => import('@/views/ThreadView.vue'),
+      props: true,
+      meta: { requiresAuth: true },
+    },
+
+    {
       path: '/account',
       name: 'account',
       component: () => import('@/views/AccountView.vue'),

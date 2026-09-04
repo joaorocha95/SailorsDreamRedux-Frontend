@@ -114,6 +114,21 @@ export interface WishlistItemResponse {
   product: ProductResponse
 }
 
+/**
+ * A block this user placed.
+ *
+ * `GET /blocks` lists only your own — there is deliberately no way to ask whether somebody has
+ * blocked *you*, since answering that would tell a harasser exactly what they had been shut out
+ * of. So a thread can know it is closed from your side before you write into it, and only learns
+ * about the other direction from the 403 on the send.
+ */
+export interface BlockResponse {
+  id: number
+  blockerId: number
+  blockedUserId: number
+  createdAt: string
+}
+
 export interface ReviewResponse {
   id: number
   fromUserId: number
@@ -163,3 +178,32 @@ export interface ProductSearchCriteria {
 /** The only properties the server will sort listings by. Anything else is a 400. */
 export const SORTABLE_PRODUCT_FIELDS = ['id', 'name', 'price', 'pricePerDay'] as const
 export type SortableProductField = (typeof SORTABLE_PRODUCT_FIELDS)[number]
+
+// --- Negotiation --------------------------------------------------------------
+
+/**
+ * Opening a negotiation on a listing.
+ *
+ * The seller is never supplied — the server reads it off the product, so a thread cannot be
+ * addressed to somebody who does not own the boat. `firstMessage` is required: an empty thread
+ * is noise in a seller's inbox, and saying something is the whole point of opening one.
+ *
+ * `POST /chats` is idempotent. Messaging a seller about a listing you have already messaged them
+ * about appends to the existing thread and still answers 201, so a returned chat may be one that
+ * already existed — distinguishing the two would leak whether a thread was already there.
+ */
+export interface StartChatRequest {
+  productId: number
+  /** 255 characters, matching the column. Longer is a 400, not a truncation. */
+  firstMessage: string
+}
+
+/**
+ * Posting into an existing thread.
+ *
+ * The chat is in the path and the author is the session, so the text is all that travels.
+ */
+export interface SendMessageRequest {
+  /** 255 characters, and `@NotBlank` — whitespace alone is a 400. */
+  text: string
+}

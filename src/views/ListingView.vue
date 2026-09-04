@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ApiError, api } from '@/lib/http'
 import { formatDayRate, formatPrice } from '@/lib/money'
+import { useRetryAfter } from '@/lib/retry-after'
 import { useAuthStore } from '@/stores/auth'
-import type { ListingType, ProductResponse, UserResponse } from '@/types/api'
+import type {
+  ChatResponse,
+  ListingType,
+  ProductResponse,
+  StartChatRequest,
+  UserResponse,
+} from '@/types/api'
 
 /**
  * One listing.
@@ -19,7 +26,9 @@ import type { ListingType, ProductResponse, UserResponse } from '@/types/api'
 const props = defineProps<{ id: string }>()
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
+const { secondsLeft, start: startWait } = useRetryAfter()
 
 const listing = ref<ProductResponse | null>(null)
 const seller = ref<UserResponse | null>(null)
@@ -60,8 +69,72 @@ async function loadSeller(sellerId: number) {
   }
 }
 
+/**
+ * Opening a negotiation.
+ *
+ * `POST /chats` requires a first message — an empty thread is noise in a seller's inbox, and
+ * saying something is the whole point of starting one — so the CTA reveals a composer rather
+ * than navigating to an empty thread. That also keeps the reader beside the boat while they
+ * write about it, which is the sentence they are most likely to want.
+ *
+ * The call is idempotent: messaging a seller about a listing you have already messaged them
+ * about appends to the existing thread and still answers 201. So this is also the way *back*
+ * into a conversation from the listing, and it must not read as an error when it lands in one
+ * that was already there.
+ */
+const composing = ref(false)
+const firstMessage = ref('')
+const starting = ref(false)
+const startError = ref('')
+
+const messageRef = ref<HTMLTextAreaElement | null>(null)
+
+async function openComposer() {
+  composing.value = true
+  startError.value = ''
+  await nextTick()
+  messageRef.value?.focus()
+}
+
+async function startChat() {
+  const text = firstMessage.value.trim()
+  if (!text || starting.value || !listing.value || secondsLeft.value > 0) return
+
+  starting.value = true
+  startError.value = ''
+
+  try {
+    const body: StartChatRequest = { productId: listing.value.id, firstMessage: text }
+    const chat = await api.post<ChatResponse>('/chats', body)
+    router.push({ name: 'thread', params: { id: String(chat.id) } })
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      startError.value = 'The message did not send. Check your connection and try again.'
+      return
+    }
+
+    // The quota here is 20 new threads an hour, keyed to the account. Counting down beats
+    // leaving a live button that spends a refusal on every press.
+    if (error.isRateLimited) startWait(error.retryAfterSeconds)
+    // A withdrawn listing is a 404 on the way in, and the page should say so rather than leaving
+    // a composer open over a boat that is no longer for sale.
+    if (error.isNotFound) {
+      state.value = 'gone'
+      return
+    }
+    // Everything else — a block (403), a retired account on either side (409), a message the
+    // server would not accept (400) — arrives with a `detail` written to be read.
+    startError.value = error.message
+  } finally {
+    starting.value = false
+  }
+}
+
 async function load() {
   state.value = 'loading'
+  composing.value = false
+  firstMessage.value = ''
+  startError.value = ''
   seller.value = null
   activeImage.value = 0
 
@@ -179,8 +252,43 @@ watch(() => props.id, load)
           </RouterLink>
 
           <template v-else>
-            <button type="button" class="cta" disabled>Message the owner</button>
-            <p class="note">Messaging opens with the inbox.</p>
+            <button v-if="!composing" type="button" class="cta" @click="openComposer">
+              Message the owner
+            </button>
+
+            <form v-else class="start" @submit.prevent="startChat">
+              <label class="sr-only" for="first-message">Your message</label>
+              <textarea
+                id="first-message"
+                ref="messageRef"
+                v-model="firstMessage"
+                rows="3"
+                maxlength="255"
+                placeholder="Ask about the boat, or make an offer"
+                :disabled="starting"
+              ></textarea>
+
+              <div class="start-actions">
+                <button
+                  type="submit"
+                  class="cta"
+                  :disabled="starting || firstMessage.trim().length === 0 || secondsLeft > 0"
+                >
+                  <template v-if="secondsLeft > 0">Wait {{ secondsLeft }}s</template>
+                  <template v-else>{{ starting ? 'Sending…' : 'Send' }}</template>
+                </button>
+                <button
+                  type="button"
+                  class="cancel"
+                  :disabled="starting"
+                  @click="composing = false"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <p v-if="startError" class="start-error" role="alert">{{ startError }}</p>
+            </form>
           </template>
         </div>
 
@@ -414,6 +522,49 @@ watch(() => props.id, load)
 .note {
   font-size: var(--step--1);
   color: var(--ink-faint);
+}
+
+/* Full width of the info column: this is the first thing said to a stranger about a boat that
+   may cost six figures, and a one-line field invites a one-line message. */
+.start {
+  display: grid;
+  gap: var(--sp-3);
+  width: 100%;
+  max-width: var(--measure);
+}
+.start textarea {
+  width: 100%;
+  resize: vertical;
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color var(--d-pop) var(--ease-out);
+}
+.start textarea:focus {
+  border-color: var(--ink-faint);
+}
+
+.start-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.cancel {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.start-error {
+  font-size: var(--step--1);
+  color: var(--critical);
 }
 
 .back {
