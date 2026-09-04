@@ -225,6 +225,14 @@ in a diff.
       `anyRequest().authenticated()`, and there is no fallback route, so every client-side URL
       (`/messages/1`, `/listings/2`) is a 401 too. Item 13 below.
 
+- [ ] **The typefaces are never loaded.** `tokens.css` names Instrument Serif, DM Sans and
+      JetBrains Mono, and nothing anywhere fetches them — no `<link>`, no `@font-face`, no files in
+      `public/`. All three fall through to their fallbacks (Georgia, system-ui, Consolas), so the
+      typography the direction was *chosen* for has never actually been on screen. Found by reading
+      `index.html` closely rather than by looking at the app, which is its own lesson. Self-hosting
+      is the precedent here (see the note in `ambience.ts` about third-party origins), so this
+      wants the woff2 files committed and an `@font-face` block, not a Google Fonts `<link>`.
+
 Not attempted: reduced motion could not be *emulated* in the browser pane, so that fix is verified
 by reading the cascade rather than by watching it. Nothing image-shaped was checked at all — see
 item 11.
