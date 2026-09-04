@@ -1,0 +1,124 @@
+/* ===================================================================
+   The staff pages, shared.
+
+   Plain by intent — these are work queues, not shop windows — but plain
+   is not the same as unstyled: they use the same tokens as everything
+   else, just with the whitespace turned down. Density is right here in
+   a way it would be wrong on a listing.
+
+   Imported into each view's scoped block, so every rule still ends up
+   scoped to the component that pulled it in.
+   =================================================================== */
+
+.admin {
+  padding-block: clamp(1.5rem, 4vw, 3rem) var(--sp-8);
+}
+
+.admin h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--step-2);
+}
+
+.status,
+.empty {
+  color: var(--ink-soft);
+  padding: var(--sp-6) 0;
+}
+
+.error {
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: start;
+  max-width: var(--measure);
+  border-left: 2px solid var(--critical);
+  background: var(--critical-wash);
+  padding: var(--sp-4) var(--sp-5);
+  color: var(--ink-soft);
+}
+
+.retry,
+.primary {
+  background: var(--ink);
+  color: var(--ground);
+  border: 0;
+  border-radius: 3px;
+  padding: 0.34rem 0.9rem;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.row-error {
+  margin-bottom: var(--sp-3);
+  font-size: var(--step--1);
+  color: var(--critical);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+  transition: opacity var(--d-pop) var(--ease-out);
+}
+.rows.busy {
+  opacity: 0.55;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.actions button {
+  font-size: var(--step--1);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.28rem 0.7rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.actions button.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--ground);
+}
+.actions button:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+  transform: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .actions button:not(:disabled):hover {
+    border-color: var(--ink-faint);
+    color: var(--ink);
+  }
+  .actions button.primary:not(:disabled):hover {
+    color: var(--ground);
+  }
+}
+
+.pages {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-top: var(--sp-5);
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+}
+.pages button {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0.28rem 0.85rem;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.pages button:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+  transform: none;
+}

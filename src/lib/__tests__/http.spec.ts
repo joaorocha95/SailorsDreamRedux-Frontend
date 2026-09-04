@@ -136,6 +136,22 @@ describe('query parameters', () => {
     expect(url.searchParams.has('categoryId')).toBe(false)
     expect(url.searchParams.has('listingType')).toBe(false)
   })
+
+  /**
+   * The dropping is by value, not by truthiness, and the difference is load-bearing. The report
+   * queue asks for pending work as `reviewed=false`; a `!value` check here would silently turn
+   * that into "everything", which reads as a broken filter rather than a broken client. Zero has
+   * the same shape — `page=0` is the first page, not an absent one.
+   */
+  it('keeps false and zero, which are answers rather than absences', async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ content: [] }))
+
+    await api.get('/reports', { query: { reviewed: false, page: 0 } })
+
+    const url = lastUrl()
+    expect(url.searchParams.get('reviewed')).toBe('false')
+    expect(url.searchParams.get('page')).toBe('0')
+  })
 })
 
 describe('errors', () => {

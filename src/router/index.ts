@@ -9,6 +9,15 @@ declare module 'vue-router' {
     requiresAuth?: boolean
     /** Sends signed-in users away — for /login and /signup. */
     guestOnly?: boolean
+    /**
+     * Staff only. Implies `requiresAuth`.
+     *
+     * The tier is checked here as well as on the server, and the two are doing different jobs:
+     * `SecurityConfig` is the access control, and this only decides whether to render a page whose
+     * every request would 403. Without it a non-admin following a link gets three failed requests
+     * and an error screen instead of an answer.
+     */
+    requiresAdmin?: boolean
   }
 }
 
@@ -39,6 +48,29 @@ const router = createRouter({
       name: 'signup',
       component: () => import('@/views/SignupView.vue'),
       meta: { guestOnly: true },
+    },
+
+    // Plain by intent — a work queue, not a shop window. Split by task rather than tabbed into
+    // one page: they are three unrelated jobs that happen to share an audience.
+    {
+      path: '/admin/reports',
+      name: 'admin-reports',
+      component: () => import('@/views/admin/AdminReportsView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+
+    {
+      path: '/admin/categories',
+      name: 'admin-categories',
+      component: () => import('@/views/admin/AdminCategoriesView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+
+    {
+      path: '/admin/users',
+      name: 'admin-users',
+      component: () => import('@/views/admin/AdminUsersView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
 
     {
@@ -132,6 +164,12 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.guestOnly && auth.isAuthenticated) {
+    return { name: 'browse' }
+  }
+
+  // Browse rather than login: a signed-in user who is not staff has not failed to authenticate,
+  // and sending them to a sign-in form would suggest a different account might work.
+  if (to.meta.requiresAdmin && !auth.isAdmin) {
     return { name: 'browse' }
   }
 

@@ -197,6 +197,30 @@ export interface ProductSearchCriteria {
 export const SORTABLE_PRODUCT_FIELDS = ['id', 'name', 'price', 'pricePerDay'] as const
 export type SortableProductField = (typeof SORTABLE_PRODUCT_FIELDS)[number]
 
+// --- Administration -----------------------------------------------------------
+
+/**
+ * Creating a category.
+ *
+ * `name` is non-blank and capped at **100**, not the 255 the product fields carry. A duplicate is
+ * a **409**, checked case-insensitively — a vocabulary holding both "Yachts" and "yachts" would be
+ * broken on its face, two filter entries reading the same and splitting the listings between them.
+ */
+export interface CreateCategoryRequest {
+  name: string
+}
+
+/**
+ * Renaming one. The id comes from the path and is deliberately not in the body.
+ *
+ * Note this breaks the "null means leave unchanged" convention every other PATCH here follows: a
+ * category has exactly one mutable field, so a request that omits it is asking for nothing, and
+ * calling that success would be a lie. `name` is required.
+ */
+export interface UpdateCategoryRequest {
+  name: string
+}
+
 // --- Safety -------------------------------------------------------------------
 
 /**

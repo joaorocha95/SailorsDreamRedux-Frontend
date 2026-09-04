@@ -5,7 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
-const { isAuthenticated, user } = storeToRefs(auth)
+const { isAdmin, isAuthenticated, user } = storeToRefs(auth)
 </script>
 
 <template>
@@ -19,6 +19,9 @@ const { isAuthenticated, user } = storeToRefs(auth)
           <RouterLink :to="{ name: 'selling' }">Selling</RouterLink>
           <RouterLink :to="{ name: 'inbox' }">Messages</RouterLink>
           <RouterLink :to="{ name: 'saved' }">Saved</RouterLink>
+          <RouterLink v-if="isAdmin" :to="{ name: 'admin-reports' }" class="staff"
+            >Staff</RouterLink
+          >
         </template>
       </nav>
 
@@ -64,8 +67,7 @@ const { isAuthenticated, user } = storeToRefs(auth)
   margin-left: auto;
 }
 
-.links a,
-.pending {
+.links a {
   font-size: var(--step--1);
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -78,9 +80,10 @@ const { isAuthenticated, user } = storeToRefs(auth)
     border-color var(--d-pop) var(--ease-out);
 }
 
-.pending {
-  color: var(--ink-faint);
-  cursor: default;
+/* Marked apart from the rest of the navigation: the pages behind it act on other people's
+   accounts, and knowing you are one click from that is worth a colour. */
+.links a.staff {
+  color: var(--caution);
 }
 
 /* Gated: on a touch device a tap fires :hover, so an ungated hover style sticks after the tap. */
