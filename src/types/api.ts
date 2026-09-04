@@ -179,6 +179,44 @@ export interface ProductSearchCriteria {
 export const SORTABLE_PRODUCT_FIELDS = ['id', 'name', 'price', 'pricePerDay'] as const
 export type SortableProductField = (typeof SORTABLE_PRODUCT_FIELDS)[number]
 
+// --- Wishlist and reviews -----------------------------------------------------
+
+/**
+ * Saving a listing. The owner is the session, never a body field.
+ *
+ * Both writes are **idempotent**: adding something already saved answers 201 with the existing
+ * row, and removing something that was never there answers 204. The end state holds either way,
+ * and on your own private list the distinction tells you nothing.
+ *
+ * There is no "is this saved?" endpoint — but `GET /wishlist` is unpaged, so the whole set
+ * arrives in one request and the client can answer it from that.
+ */
+export interface AddToWishlistRequest {
+  productId: number
+}
+
+/**
+ * Leaving a review, which has more gates than any other write in the API:
+ *
+ *  - not yourself (400);
+ *  - neither party retired (409) — a closed account cannot answer a review, and its rating would
+ *    be attached to a name that no longer exists;
+ *  - the two must **share a chat** (400). With no orders to anchor to, having negotiated at all is
+ *    the only evidence that two people ever dealt with each other;
+ *  - **one per direction per pair** (400).
+ *
+ * The last gate is the awkward one, because there are no read endpoints for reviews at all — not
+ * yours, not anyone's — so a client cannot ask whether it has already reviewed somebody. See
+ * `src/lib/reviewed.ts`.
+ */
+export interface CreateReviewRequest {
+  toUserId: number
+  /** 1 to 5, inclusive. */
+  rating: number
+  /** Optional, 255 characters. */
+  comment?: string
+}
+
 // --- Selling ------------------------------------------------------------------
 
 /**

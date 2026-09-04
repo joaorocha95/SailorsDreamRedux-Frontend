@@ -2,18 +2,21 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { clockTime, mergeMessages, threadEntries } from '@/lib/chats'
+import { clockTime, counterpartyId, mergeMessages, threadEntries } from '@/lib/chats'
 import { lookupProduct, lookupUser } from '@/lib/directory'
 import { ApiError, api } from '@/lib/http'
 import { usePolling } from '@/lib/polling'
+import { hasReviewed, rememberReviewed } from '@/lib/reviewed'
 import { useRetryAfter } from '@/lib/retry-after'
 import { useAuthStore } from '@/stores/auth'
 import type {
   BlockResponse,
   ChatResponse,
+  CreateReviewRequest,
   MessageResponse,
   PageResponse,
   ProductResponse,
+  ReviewResponse,
   SendMessageRequest,
   UserResponse,
 } from '@/types/api'
@@ -39,6 +42,7 @@ const props = defineProps<{ id: string }>()
 
 const auth = useAuthStore()
 const { secondsLeft, start: startWait } = useRetryAfter()
+const { secondsLeft: reviewWait, start: startReviewWait } = useRetryAfter()
 
 /**
  * How many messages `GET /chats/{id}` embeds — the server's `EMBEDDED_MESSAGE_LIMIT`, mirrored
@@ -80,7 +84,27 @@ const retired = ref('')
 const historyLoaded = ref(false)
 const loadingHistory = ref(false)
 
+/**
+ * The review, offered here because this is where its gate is provably satisfied.
+ *
+ * A review requires that the two people have negotiated, and with no orders on this platform a
+ * shared chat is the only evidence of that — so a thread is the one place the form is certain to
+ * clear the first hurdle. The second hurdle, one review per direction per pair, cannot be checked
+ * at all: there are no read endpoints for reviews. `hasReviewed` is a local memo of writes this
+ * browser has already made, not an answer from the server.
+ */
+const reviewOpen = ref(false)
+const rating = ref(0)
+const comment = ref('')
+const sendingReview = ref(false)
+const reviewError = ref('')
+const reviewDone = ref(false)
+const alreadyReviewed = ref(false)
+
 const viewerId = computed(() => auth.user?.id ?? -1)
+const otherId = computed(() => (chat.value ? counterpartyId(chat.value, viewerId.value) : -1))
+/** Offered unless this browser knows the review has already been written. */
+const canReview = computed(() => !alreadyReviewed.value && !reviewDone.value && otherId.value > 0)
 const entries = computed(() => threadEntries(messages.value, viewerId.value))
 const unread = computed(() => chat.value?.unreadCount ?? 0)
 
@@ -117,12 +141,14 @@ function scrollToEnd() {
  * a name that could not be resolved is worth less than the thread it would have labelled.
  */
 async function loadContext(loaded: ChatResponse) {
-  const otherId = loaded.initiatorId === viewerId.value ? loaded.sellerId : loaded.initiatorId
+  // `otherId` reads off `chat`, which `load` set before calling this — so the computed is already
+  // correct and a second local copy of the same derivation would only be somewhere for the two to
+  // disagree.
+  const them = otherId.value
 
-  const [person, product] = await Promise.all([
-    lookupUser(otherId),
-    lookupProduct(loaded.productId),
-  ])
+  alreadyReviewed.value = hasReviewed(viewerId.value, them)
+
+  const [person, product] = await Promise.all([lookupUser(them), lookupProduct(loaded.productId)])
   other.value = person
   listing.value = product
   listingWithdrawn.value = product === null
@@ -131,7 +157,7 @@ async function loadContext(loaded: ChatResponse) {
   // somebody write a paragraph into a 403.
   try {
     const blocks = await api.get<BlockResponse[]>('/blocks')
-    blockedByMe.value = blocks.some((block) => block.blockedUserId === otherId)
+    blockedByMe.value = blocks.some((block) => block.blockedUserId === them)
   } catch {
     // Not knowing means offering the composer. The send path handles the refusal, and a failed
     // lookup is a poor reason to tell somebody a conversation is closed when it may not be.
@@ -286,6 +312,43 @@ async function send() {
 }
 
 /**
+ * Leaving the review.
+ *
+ * Every refusal here is a different situation and the server's `detail` names which — never
+ * negotiated, already reviewed, one of the two accounts retired. The one case worth handling
+ * beyond showing that sentence is success, which is remembered so the form is not offered again
+ * on this browser.
+ */
+async function submitReview() {
+  if (rating.value < 1 || sendingReview.value || reviewWait.value > 0) return
+
+  sendingReview.value = true
+  reviewError.value = ''
+
+  try {
+    const body: CreateReviewRequest = {
+      toUserId: otherId.value,
+      rating: rating.value,
+      // Optional on the server, and an empty string is not the same as leaving it out.
+      comment: comment.value.trim() === '' ? undefined : comment.value.trim(),
+    }
+    await api.post<ReviewResponse>('/reviews', body)
+    rememberReviewed(viewerId.value, otherId.value)
+    reviewDone.value = true
+    reviewOpen.value = false
+  } catch (error) {
+    if (error instanceof ApiError) {
+      startReviewWait(error.retryAfterSeconds)
+      reviewError.value = error.message
+    } else {
+      reviewError.value = 'The review did not send. Check your connection and try again.'
+    }
+  } finally {
+    sendingReview.value = false
+  }
+}
+
+/**
  * Enter sends; Shift+Enter starts a line.
  *
  * The conventional split, and the right way round for a field capped at 255 characters — most
@@ -335,6 +398,11 @@ watch(
     blockedByMe.value = false
     draft.value = ''
     sendError.value = ''
+    reviewOpen.value = false
+    reviewDone.value = false
+    reviewError.value = ''
+    rating.value = 0
+    comment.value = ''
     load()
   },
 )
@@ -383,6 +451,70 @@ watch(
           </RouterLink>
         </p>
       </header>
+
+      <!-- Thread-level actions, between the header and the conversation. Out of the reading flow
+           and clear of the sticky composer, and where blocking and reporting will join it. -->
+      <div class="thread-actions">
+        <button
+          v-if="canReview && !reviewOpen"
+          type="button"
+          class="link-btn"
+          @click="reviewOpen = true"
+        >
+          Leave a review
+        </button>
+        <p v-else-if="reviewDone" class="done" role="status">
+          Review left. Thank you — one per person, so this is spent now.
+        </p>
+        <p v-else-if="alreadyReviewed" class="done">You have already reviewed this person.</p>
+      </div>
+
+      <form v-if="reviewOpen" class="review" @submit.prevent="submitReview">
+        <p class="review-lede">
+          How was dealing with {{ other?.name ?? 'them' }}? Reviews are one per person, per
+          direction, and cannot be edited afterwards.
+        </p>
+
+        <fieldset class="stars">
+          <legend class="sr-only">Rating, one to five</legend>
+          <label v-for="value in [1, 2, 3, 4, 5]" :key="value" class="star">
+            <input v-model.number="rating" type="radio" name="rating" :value="value" />
+            <span aria-hidden="true">{{ value <= rating ? '★' : '☆' }}</span>
+            <span class="sr-only">{{ value }}</span>
+          </label>
+        </fieldset>
+
+        <label class="sr-only" for="review-comment">Comment</label>
+        <textarea
+          id="review-comment"
+          v-model="comment"
+          rows="3"
+          maxlength="255"
+          placeholder="Anything worth saying (optional)"
+          :disabled="sendingReview"
+        ></textarea>
+
+        <div class="review-actions">
+          <button
+            type="submit"
+            class="cta"
+            :disabled="sendingReview || rating < 1 || reviewWait > 0"
+          >
+            <template v-if="reviewWait > 0">Wait {{ reviewWait }}s</template>
+            <template v-else>{{ sendingReview ? 'Sending…' : 'Leave review' }}</template>
+          </button>
+          <button
+            type="button"
+            class="link-btn"
+            :disabled="sendingReview"
+            @click="reviewOpen = false"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <p v-if="reviewError" class="send-error" role="alert">{{ reviewError }}</p>
+      </form>
 
       <div v-if="mightHaveMore || historyLoaded" class="earlier">
         <button v-if="mightHaveMore" type="button" :disabled="loadingHistory" @click="loadHistory">
@@ -552,6 +684,90 @@ watch(
 .start {
   font-size: var(--step--1);
   color: var(--ink-faint);
+}
+
+.thread-actions {
+  display: flex;
+  gap: var(--sp-4);
+  padding-top: var(--sp-4);
+  font-size: var(--step--1);
+}
+
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+  transform: none;
+}
+
+.done {
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+}
+
+.review {
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: start;
+  margin-top: var(--sp-4);
+  padding: var(--sp-4);
+  background: var(--wash);
+  border-radius: 3px;
+  max-width: var(--measure);
+}
+.review-lede {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+.review textarea {
+  width: 100%;
+  resize: vertical;
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.stars {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: var(--sp-1);
+}
+.star {
+  cursor: pointer;
+  font-size: var(--step-2);
+  line-height: 1;
+  color: var(--ink);
+}
+/* The input is the control; the star is its face. Hidden rather than removed so the radio group
+   keeps its keyboard behaviour and its focus ring lands somewhere visible. */
+.star input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.star:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
 }
 
 .messages {

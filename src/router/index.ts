@@ -42,6 +42,13 @@ const router = createRouter({
     },
 
     {
+      path: '/saved',
+      name: 'saved',
+      component: () => import('@/views/WishlistView.vue'),
+      meta: { requiresAuth: true },
+    },
+
+    {
       path: '/selling',
       name: 'selling',
       component: () => import('@/views/SellerListingsView.vue'),

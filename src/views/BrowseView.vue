@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import FilterPanel from '@/components/FilterPanel.vue'
+import SaveButton from '@/components/SaveButton.vue'
 import { useAmbience } from '@/lib/ambience'
 import { activeCount, emptyFilters, hasRangeProblem, toQuery } from '@/lib/browse-filters'
 import { ApiError, api } from '@/lib/http'
@@ -231,7 +232,16 @@ onMounted(() => {
       </p>
 
       <ul v-else class="grid" :class="{ stagger, busy }" :aria-busy="busy">
-        <li v-for="(listing, index) in listings" :key="listing.id" :style="{ '--i': index }">
+        <li
+          v-for="(listing, index) in listings"
+          :key="listing.id"
+          class="cell"
+          :style="{ '--i': index }"
+        >
+          <!-- A sibling of the card, not a child: the card is an anchor, and a button nested
+               inside one is invalid and unreachable by keyboard in the order people expect. -->
+          <SaveButton class="card-save" :listing="listing" compact />
+
           <RouterLink :to="{ name: 'listing', params: { id: listing.id } }" class="card">
             <div class="crop">
               <img
@@ -489,6 +499,19 @@ onMounted(() => {
     opacity: 1;
     transform: none;
   }
+}
+
+.cell {
+  position: relative;
+}
+
+/* Over the photograph's top-right corner. Above the card in the stacking order so the anchor
+   underneath does not swallow the press. */
+.card-save {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
 }
 
 .card {

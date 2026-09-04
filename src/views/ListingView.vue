@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import SaveButton from '@/components/SaveButton.vue'
 import { ApiError, api } from '@/lib/http'
 import { formatDayRate, formatPrice } from '@/lib/money'
 import { useRetryAfter } from '@/lib/retry-after'
@@ -229,6 +230,13 @@ watch(() => props.id, load)
             <dd>{{ formatDayRate(listing.pricePerDay) }}</dd>
           </div>
         </dl>
+
+        <!-- Its own row, under the prices. Saving and messaging are different intents — one is
+             "come back to this", the other is "start a negotiation" — and stacking them in the
+             owner block would blur that. -->
+        <div class="keep">
+          <SaveButton :listing="listing" />
+        </div>
 
         <p class="description">{{ listing.description }}</p>
 
@@ -468,6 +476,10 @@ watch(() => props.id, load)
   font-variant-numeric: tabular-nums;
   font-size: var(--step-1);
   color: var(--ink);
+}
+
+.keep {
+  margin-bottom: var(--sp-5);
 }
 
 .description {
