@@ -178,19 +178,26 @@ Neither control is behind a confirmation, deliberately: a safety control that as
 somebody being harassed has to fight through, and blocking is undone by the button that replaces
 it.
 
-## Phase 7 — Admin &nbsp;·&nbsp; next
+## Phase 7 — Admin &nbsp;·&nbsp; done (`9083c64`)
 
-`GET /reports` and `PATCH /reports/{id}/reviewed` are ADMIN-only in `SecurityConfig`, so this is
-the first phase where the client needs a tier check rather than just a session. `ReportResponse` is
-already mirrored.
+Plain, as planned — same tokens, whitespace turned down. Three pages rather than a dashboard: a
+moderation queue, a controlled vocabulary and a user directory are unrelated jobs that share an
+audience and nothing else.
 
-Can be plain. Nobody needs it to be beautiful.
+- [x] Category maintenance; deleting one unfiles its listings rather than deleting them. The
+      confirming press says so in as many words.
+- [x] Report queue (oldest first — the server drops any `?sort=`) and mark-reviewed. Ban lives in
+      the row, since that is the loop: somebody reports, staff read this, staff act.
+- [x] Ban/unban; user directory. **Both verbs, not a toggle** — see below.
+- [ ] **Telling banned from deactivated from closed.** `isActive` is one boolean over three flags,
+      and the DTO left them un-broken-out "until [there is] an admin surface to show it on". This
+      is that surface, so a row can say *whether* an account is usable and never *why*. Item 9 on
+      the list below.
 
-- [ ] Category maintenance; deleting one unfiles its listings rather than deleting them.
-- [ ] Report queue (oldest first — it is a work queue) and mark-reviewed.
-- [ ] Ban/unban; user directory.
+`GET /users` is unpaged, so the directory's search filters what is already loaded rather than
+querying. Fine at this size, wrong at a real one — the first thing to change if the platform grows.
 
-## Phase 8 — Polish
+## Phase 8 — Polish &nbsp;·&nbsp; next
 
 Not the phase to skip. This is where it starts feeling expensive.
 
@@ -269,6 +276,16 @@ listed with what would unblock it.
    Everywhere else in this API that copy is good. The report one is worked around — it is the only
    `detail` this client suppresses, replaced with written copy — which is a patch over a string,
    and it will drift. *Needs:* names, or second-person phrasing.
+
+9. **An admin cannot see why an account is off.** `UserResponse.isActive` collapses deactivated,
+   banned and closed into one boolean — deliberately, and the DTO comment says the distinction
+   "gets added" once an admin surface exists. It exists now. The staff directory offers Ban and
+   Unban side by side because a toggle would have to guess which state a row is in. *Needs:* the
+   three flags, or a status enum, on `UserResponse` — or a separate admin-only shape, if telling
+   every caller who has been banned is the thing being avoided.
+10. **`GET /users` is unpaged.** The whole table in one response, so the directory searches what it
+    already holds. Bounded by how many accounts exist, which is the one collection here that has no
+    natural ceiling. *Needs:* a `PageResponse` and a `?name=` filter, the same shape browse has.
 
 ## Open questions
 
