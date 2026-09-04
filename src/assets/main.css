@@ -1,3 +1,6 @@
+/* Faces first, then the tokens that name them, then the base styles that use both. The order is
+   not load-bearing — CSS does not care — but it is the order the cascade reads in. */
+@import './fonts.css';
 @import './tokens.css';
 
 /* ===================================================================

@@ -19,12 +19,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!--
-      The tab title, and the name a bookmark takes.
+      Only the display face is preloaded, and only its `latin` slice.
 
-      NOTE: the three typefaces the design rests on — Instrument Serif, DM Sans, JetBrains Mono —
-      are declared in `tokens.css` but never actually loaded, here or anywhere else. Every one of
-      them currently falls through to its fallback (Georgia, system-ui, Consolas). See the README.
+      Without this, the browser learns the headline needs Instrument Serif three round trips in:
+      HTML, then the stylesheet, then the `@font-face` inside it. The largest text on every page
+      would render in Georgia and reflow when the real face arrived. `crossorigin` is required
+      even for a same-origin font — fonts are fetched in CORS mode, and a preload without it is
+      fetched a second time rather than reused.
+
+      The other five faces are deliberately not preloaded: DM Sans and JetBrains Mono swap far
+      less visibly at body and figure sizes, and the `latin-ext` slices are only needed if a page
+      actually contains those characters.
     -->
+    <link
+      rel="preload"
+      href="/fonts/instrument-serif-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
+    <!-- The tab title, and the name a bookmark takes. -->
     <title>Sailor's Dream</title>
   </head>
   <body>
