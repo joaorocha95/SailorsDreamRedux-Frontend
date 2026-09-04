@@ -211,7 +211,13 @@ onMounted(() => {
         <FilterPanel v-model="filters" :categories="categories" />
 
         <div class="bar">
-          <span class="count">{{ total }} {{ total === 1 ? 'listing' : 'listings' }}</span>
+          <!-- A live region, because this line is the *answer* to a filter. Sighted users see the
+               grid change; without this nobody else is told anything happened. Polite and
+               debounced by the filter itself, so typing a name announces once when the typing
+               stops rather than once per keystroke. -->
+          <span class="count" role="status">
+            {{ total }} {{ total === 1 ? 'listing' : 'listings' }}
+          </span>
 
           <span class="sort">
             <label for="sort">Sort</label>
@@ -238,10 +244,6 @@ onMounted(() => {
           class="cell"
           :style="{ '--i': index }"
         >
-          <!-- A sibling of the card, not a child: the card is an anchor, and a button nested
-               inside one is invalid and unreachable by keyboard in the order people expect. -->
-          <SaveButton class="card-save" :listing="listing" compact />
-
           <RouterLink :to="{ name: 'listing', params: { id: listing.id } }" class="card">
             <div class="crop">
               <img
@@ -258,6 +260,12 @@ onMounted(() => {
               <span class="price">{{ priceLabel(listing) }}</span>
             </div>
           </RouterLink>
+
+          <!-- A sibling of the card rather than a child, because a button inside an anchor is
+               invalid — and *after* it, which is the part an audit caught: reversed, the tab order
+               ran save, card, save, card, so a keyboard user was offered "save this" before
+               anything had said which listing it was. Position is absolute either way. -->
+          <SaveButton class="card-save" :listing="listing" compact />
         </li>
       </ul>
 

@@ -15,7 +15,21 @@ import type { ProblemDetail } from '@/types/api'
  *  4. **401.** A dead session should log the app out once, centrally, not in forty catch blocks.
  */
 
-const BASE = '/api'
+/**
+ * Where the API lives, relative to wherever this page is served from.
+ *
+ * **`/api` is a development-only fiction.** The API's own routes are at the root — `/products`,
+ * `/auth/login` — and the prefix exists solely so the Vite dev server knows which requests to
+ * forward to `:8080`, stripping it on the way. Served the way production serves it, same-origin
+ * with the API, there is nothing to mark and nothing to strip: the prefix would just be a path
+ * Spring has never heard of.
+ *
+ * Overridable with `VITE_API_BASE` for a deployment that really does mount the API under a
+ * prefix — behind a reverse proxy carving one origin into two, say. Empty string means "the root
+ * of this origin", which is the same-origin case the cookie session and the CSRF double-submit
+ * both assume.
+ */
+const BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? '/api' : '')
 const CSRF_COOKIE = 'XSRF-TOKEN'
 const CSRF_HEADER = 'X-XSRF-TOKEN'
 

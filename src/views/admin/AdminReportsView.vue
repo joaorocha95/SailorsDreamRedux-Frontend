@@ -201,7 +201,12 @@ onMounted(load)
         {{ filter === 'pending' ? 'Nothing waiting. The queue is clear.' : 'No reports here.' }}
       </p>
 
-      <p v-else class="count">{{ totalElements }} report{{ totalElements === 1 ? '' : 's' }}</p>
+      <!-- Same reasoning as browse: the count is what answers the filter buttons. Safe to
+           announce here because it changes on a deliberate press, not on every keystroke — which
+           is why the user search on the directory page is deliberately *not* a live region. -->
+      <p v-else class="count" role="status">
+        {{ totalElements }} report{{ totalElements === 1 ? '' : 's' }}
+      </p>
 
       <p v-if="rowError" class="row-error" role="alert">{{ rowError }}</p>
 

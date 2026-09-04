@@ -255,10 +255,4 @@ function clear() {
 .done:active {
   transform: scale(0.97);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .sheet {
-    transition-duration: 120ms;
-  }
-}
 </style>

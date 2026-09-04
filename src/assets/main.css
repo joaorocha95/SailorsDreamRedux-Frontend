@@ -107,15 +107,29 @@ button:active,
   border: 0;
 }
 
-/* Reduced motion means gentler, not none: opacity and colour still aid comprehension, movement
-   is what causes trouble. */
+/* Reduced motion means gentler, not none: opacity and colour still aid comprehension, movement is
+   what causes trouble.
+
+   This block used to say that and do the opposite — 0.001ms is an instant cut, which is exactly
+   the "none" the spec rules out. Worse, `!important` on a `*` selector silently outranked every
+   component that had written a considered reduced-motion rule of its own, so the drawer's 120ms
+   and the gallery's 80ms had never once run. Those rules are gone now; this is the single policy.
+
+   It stays `!important` on purpose. A `*` selector has no specificity, so without it this net
+   would lose to every component rule and catch nothing — which is the opposite of what a net is
+   for. Anything needing a *different* treatment rather than a shorter one reduces its travel
+   instead (see the thread's message entrance), and that still works: this caps duration, not
+   transforms. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.001ms !important;
+    animation-duration: var(--d-reduced) !important;
+    /* Loops are the genuinely unbearable case, so those stop rather than shorten. */
     animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+    transition-duration: var(--d-reduced) !important;
+    /* The one thing that really is switched off: smooth scrolling is a classic trigger, and a
+       jump to the right place is a perfectly good answer. */
     scroll-behavior: auto !important;
   }
 }

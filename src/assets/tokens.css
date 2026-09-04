@@ -80,6 +80,11 @@
   --d-overlay: 280ms; /* modals, drawers */
   --d-image: 600ms; /* photographic scale — slow on purpose */
 
+  /* The floor everything collapses to under `prefers-reduced-motion`. Not zero: reduced motion
+     means gentler, not none — a state change still has to be legible, and an instant cut is its
+     own kind of jarring. Short enough that nothing travels far at this speed. */
+  --d-reduced: 120ms;
+
   color-scheme: light;
 }
 

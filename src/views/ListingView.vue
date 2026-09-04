@@ -616,11 +616,4 @@ watch(() => props.id, load)
   text-transform: uppercase;
   color: var(--ink-soft);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .swap-enter-active,
-  .swap-leave-active {
-    transition-duration: 80ms;
-  }
-}
 </style>
