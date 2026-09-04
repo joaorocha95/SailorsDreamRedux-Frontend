@@ -8,9 +8,10 @@ import { ApiError, api } from '@/lib/http'
 import { usePolling } from '@/lib/polling'
 import { hasReviewed, rememberReviewed } from '@/lib/reviewed'
 import { useRetryAfter } from '@/lib/retry-after'
+import SafetyActions from '@/components/SafetyActions.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useBlocksStore } from '@/stores/blocks'
 import type {
-  BlockResponse,
   ChatResponse,
   CreateReviewRequest,
   MessageResponse,
@@ -41,6 +42,7 @@ import type {
 const props = defineProps<{ id: string }>()
 
 const auth = useAuthStore()
+const blocks = useBlocksStore()
 const { secondsLeft, start: startWait } = useRetryAfter()
 const { secondsLeft: reviewWait, start: startReviewWait } = useRetryAfter()
 
@@ -70,8 +72,6 @@ const draft = ref('')
 const sending = ref(false)
 const sendError = ref('')
 
-/** You blocked them. Known before writing anything, because `GET /blocks` lists your own blocks. */
-const blockedByMe = ref(false)
 /**
  * The thread refused a message. A block from the other direction is invisible until then — the
  * API has no way to ask "does this person block me", and adding one would tell a harasser
@@ -103,6 +103,15 @@ const alreadyReviewed = ref(false)
 
 const viewerId = computed(() => auth.user?.id ?? -1)
 const otherId = computed(() => (chat.value ? counterpartyId(chat.value, viewerId.value) : -1))
+
+/**
+ * You blocked them — known before writing anything, because `GET /blocks` lists your own blocks.
+ *
+ * Derived from the store rather than fetched here, so blocking from the actions strip below
+ * closes the composer in the same tick. The other direction stays invisible until the send's 403;
+ * there is no endpoint for who blocked *you*, and there should not be.
+ */
+const blockedByMe = computed(() => otherId.value > 0 && blocks.isBlocked(otherId.value))
 /** Offered unless this browser knows the review has already been written. */
 const canReview = computed(() => !alreadyReviewed.value && !reviewDone.value && otherId.value > 0)
 const entries = computed(() => threadEntries(messages.value, viewerId.value))
@@ -154,15 +163,10 @@ async function loadContext(loaded: ChatResponse) {
   listingWithdrawn.value = product === null
 
   // Your own blocks, so the composer can be replaced with an explanation instead of letting
-  // somebody write a paragraph into a 403.
-  try {
-    const blocks = await api.get<BlockResponse[]>('/blocks')
-    blockedByMe.value = blocks.some((block) => block.blockedUserId === them)
-  } catch {
-    // Not knowing means offering the composer. The send path handles the refusal, and a failed
-    // lookup is a poor reason to tell somebody a conversation is closed when it may not be.
-    blockedByMe.value = false
-  }
+  // somebody write a paragraph into a 403. A failed load leaves the store empty and the composer
+  // offered — the send path handles the refusal, and not knowing is a poor reason to tell
+  // somebody a conversation is closed when it may not be.
+  await blocks.ensureLoaded()
 }
 
 /**
@@ -395,7 +399,6 @@ watch(
     messages.value = []
     other.value = null
     listing.value = null
-    blockedByMe.value = false
     draft.value = ''
     sendError.value = ''
     reviewOpen.value = false
@@ -468,6 +471,14 @@ watch(
         </p>
         <p v-else-if="alreadyReviewed" class="done">You have already reviewed this person.</p>
       </div>
+
+      <SafetyActions
+        v-if="otherId > 0"
+        class="safety-strip"
+        :user-id="otherId"
+        :name="other?.name"
+        context="thread"
+      />
 
       <form v-if="reviewOpen" class="review" @submit.prevent="submitReview">
         <p class="review-lede">
@@ -711,6 +722,10 @@ watch(
 .done {
   font-size: var(--step--1);
   color: var(--ink-faint);
+}
+
+.safety-strip {
+  padding-top: var(--sp-3);
 }
 
 .review {

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { ApiError, api } from '@/lib/http'
+import { lookupUser } from '@/lib/directory'
 import { imageRejection } from '@/lib/image-upload'
 import { useRetryAfter } from '@/lib/retry-after'
 import { useAuthStore } from '@/stores/auth'
+import { useBlocksStore } from '@/stores/blocks'
 import type { UserResponse } from '@/types/api'
 
 /**
@@ -21,6 +23,7 @@ import type { UserResponse } from '@/types/api'
  */
 
 const auth = useAuthStore()
+const blocks = useBlocksStore()
 const router = useRouter()
 
 const name = ref(auth.user?.name ?? '')
@@ -160,6 +163,46 @@ async function closeAccount() {
     closing.value = false
   }
 }
+
+/**
+ * The blocked list, and why it needs a home here.
+ *
+ * Blocking someone removes the conversation from **both** inboxes — that is the point of it — but
+ * it also means the thread is no longer anywhere you can navigate to. Without this section the
+ * only route back to unblocking somebody would be a bookmarked thread URL, which is to say that
+ * an easily-reversible act would be, in practice, permanent.
+ *
+ * `GET /blocks` returns ids, so the names are resolved the same way an inbox row's are.
+ */
+const blockedNames = ref<Record<number, string>>({})
+const unblocking = ref<number | null>(null)
+const blockError = ref('')
+
+async function loadBlockedNames() {
+  await Promise.all(
+    blocks.blocks.map(async (block) => {
+      const user = await lookupUser(block.blockedUserId)
+      if (user) blockedNames.value[block.blockedUserId] = user.name
+    }),
+  )
+}
+
+async function unblock(userId: number) {
+  unblocking.value = userId
+  blockError.value = ''
+  try {
+    await blocks.unblock(userId)
+  } catch (error) {
+    blockError.value = describe(error, 'Could not unblock that person just now.')
+  } finally {
+    unblocking.value = null
+  }
+}
+
+onMounted(async () => {
+  await blocks.ensureLoaded()
+  void loadBlockedNames()
+})
 </script>
 
 <template>
@@ -247,6 +290,35 @@ async function closeAccount() {
       </div>
 
       <p v-if="pictureError" class="error" role="alert">{{ pictureError }}</p>
+    </section>
+
+    <section class="block">
+      <h2>Blocked</h2>
+
+      <p v-if="blocks.status === 'loading'" class="note" role="status">Loading…</p>
+      <p v-else-if="blocks.status === 'error'" class="error" role="alert">
+        {{ blocks.errorMessage }}
+      </p>
+      <p v-else-if="blocks.blocks.length === 0" class="note">
+        Nobody. Blocking someone from a conversation or a listing stops the two of you reaching each
+        other, and undoing it lives here.
+      </p>
+
+      <ul v-else class="blocked">
+        <li v-for="block in blocks.blocks" :key="block.id">
+          <span>{{ blockedNames[block.blockedUserId] ?? 'Someone' }}</span>
+          <button
+            type="button"
+            class="link-btn"
+            :disabled="unblocking === block.blockedUserId"
+            @click="unblock(block.blockedUserId)"
+          >
+            Unblock
+          </button>
+        </li>
+      </ul>
+
+      <p v-if="blockError" class="error" role="alert">{{ blockError }}</p>
     </section>
 
     <section class="block danger">
@@ -479,5 +551,37 @@ input:disabled {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.blocked {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sp-3);
+  max-width: var(--measure);
+}
+.blocked li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+  transform: none;
 }
 </style>

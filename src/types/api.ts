@@ -35,7 +35,25 @@ export interface PageResponse<T> {
 
 export type ListingType = 'FOR_SALE' | 'FOR_RENT' | 'BOTH'
 export type AccountType = 'USER' | 'ADMIN' | 'SUPPORT'
-export type ReportReason = 'HARASSMENT' | 'SPAM' | 'SCAM' | 'INAPPROPRIATE_CONTENT' | 'OTHER'
+/**
+ * Why a user was reported. An enum rather than free text because it is what a staff queue sorts
+ * and filters on — "show me the scam reports" has to be answerable without reading every row.
+ *
+ * `OTHER` is deliberate rather than a gap: a fixed list will always be missing the case somebody
+ * is actually living through, and forcing them into the nearest wrong category loses more than an
+ * explicit escape hatch does.
+ *
+ * The array is the iteration order for a form; the union is what the wire accepts. Keeping the
+ * two derived from each other is what stops a reason existing in one and not the other.
+ */
+export const REPORT_REASONS = [
+  'HARASSMENT',
+  'SPAM',
+  'SCAM',
+  'INAPPROPRIATE_CONTENT',
+  'OTHER',
+] as const
+export type ReportReason = (typeof REPORT_REASONS)[number]
 
 /**
  * A listing. Comes in two shapes from the same endpoint family:
@@ -178,6 +196,54 @@ export interface ProductSearchCriteria {
 /** The only properties the server will sort listings by. Anything else is a 400. */
 export const SORTABLE_PRODUCT_FIELDS = ['id', 'name', 'price', 'pricePerDay'] as const
 export type SortableProductField = (typeof SORTABLE_PRODUCT_FIELDS)[number]
+
+// --- Safety -------------------------------------------------------------------
+
+/**
+ * Blocking someone. The blocker is the session, never a body field — and that rule bites harder
+ * here than anywhere else, because a caller-supplied blocker id would let anyone cut two other
+ * people off from each other.
+ *
+ * Idempotent: a repeat answers 201 with the existing row, and unblocking someone you never
+ * blocked answers 204. **No retirement gate on either side**, uniquely — every other gate guards
+ * an action that publishes something, and blocking publishes nothing. A deactivated user must
+ * still be able to protect themselves, and a block on a banned account has to outlive the ban.
+ */
+export interface CreateBlockRequest {
+  blockedUserId: number
+}
+
+/**
+ * Reporting someone to staff.
+ *
+ * Deliberately **not** gated on a shared chat, unlike a review: a review is public standing and
+ * needs the negotiation as proof the rater has grounds, while a report is a private message to
+ * staff about behaviour — a scam listing, an abusive profile — that is often visible without ever
+ * having opened a thread. So this is offered from a listing as well as from a conversation.
+ *
+ * **One unreviewed report per pair.** A second incident deserves its own row once staff have
+ * cleared the first; a second row about a complaint nobody has read yet only makes the queue
+ * longer. A repeat before then is a 400.
+ */
+export interface CreateReportRequest {
+  reportedUserId: number
+  /** Required. An unset reason and a deliberate "none of these fit" are different statements. */
+  reason: ReportReason
+  /** Optional evidence. **1000** characters here, not the 255 most text fields carry. */
+  details?: string
+}
+
+/** The filed report, handed back as the reporter's receipt that it exists. */
+export interface ReportResponse {
+  id: number
+  reporterId: number
+  reportedUserId: number
+  reason: ReportReason
+  details: string | null
+  /** Cleared by staff. Reading the queue and setting this are both admin-only — phase 7. */
+  reviewed: boolean
+  createdAt: string
+}
 
 // --- Wishlist and reviews -----------------------------------------------------
 

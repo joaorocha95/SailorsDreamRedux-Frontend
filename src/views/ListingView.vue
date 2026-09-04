@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import SafetyActions from '@/components/SafetyActions.vue'
 import SaveButton from '@/components/SaveButton.vue'
 import { ApiError, api } from '@/lib/http'
 import { formatDayRate, formatPrice } from '@/lib/money'
@@ -306,6 +307,18 @@ watch(() => props.id, load)
               <p v-if="startError" class="start-error" role="alert">{{ startError }}</p>
             </form>
           </template>
+
+          <!-- Reporting is deliberately not gated on ever having negotiated: the behaviour worth
+               reporting — a scam listing, a profile carrying something that does not belong — is
+               often visible without opening a thread at all. So it belongs here too, not only in
+               the inbox. -->
+          <SafetyActions
+            v-if="seller && !isOwnListing && auth.isAuthenticated"
+            class="safety"
+            :user-id="seller.id"
+            :name="seller.name"
+            context="listing"
+          />
         </div>
 
         <RouterLink :to="{ name: 'browse' }" class="back">Back to browse</RouterLink>
@@ -542,6 +555,15 @@ watch(() => props.id, load)
 .note {
   font-size: var(--step--1);
   color: var(--ink-faint);
+}
+
+/* Set apart from the messaging CTA above it: these are the controls you reach for when the thing
+   you want is the opposite of getting in touch. */
+.safety {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--rule-soft);
+  width: 100%;
 }
 
 /* Full width of the info column: this is the first thing said to a stranger about a boat that
