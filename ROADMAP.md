@@ -286,6 +286,17 @@ listed with what would unblock it.
 10. **`GET /users` is unpaged.** The whole table in one response, so the directory searches what it
     already holds. Bounded by how many accounts exist, which is the one collection here that has no
     natural ceiling. *Needs:* a `PageResponse` and a `?name=` filter, the same shape browse has.
+11. **Uploaded images are unreachable in the default store.** `InMemoryImageStore` keeps bytes in
+    a map and hands out `http://localhost:8080/local-images/<key>`, but nothing serves that path —
+    no resource handler — and `anyRequest().authenticated()` answers **401** for it besides. The
+    URL is absolute, so it bypasses the dev proxy too. Uploads succeed and nothing renders, which
+    means the browse cards, the gallery, avatars and the photo manager cannot be checked locally
+    at all. *Needs:* a resource handler plus a `permitAll` for the path — or an honest admission
+    that `memory` is test-only and dev should run `oci`.
+12. **No bootstrap path.** `accountType` is never settable through the API, so the first admin is
+    made with SQL; and nothing can be listed until a category exists, which only an admin can
+    create. A fresh database therefore cannot reach a usable state without a hand-written UPDATE.
+    *Needs:* a seed profile, or a first-run rule that promotes the first account.
 
 ## Open questions
 
@@ -311,6 +322,11 @@ listed with what would unblock it.
 - **Timestamps carry no zone.** Jackson writes `LocalDateTime` as `2026-09-04T14:23:05`, which
   JavaScript reads as local time, so a UTC container and a reader an hour ahead of it disagree.
   Parsing lives in one function (`src/lib/chats.ts`), and nothing renders a future.
-- **Nothing has been run against a live backend yet.** Every phase so far is verified by
-  type-check, unit tests and build, with the wire shapes read from the Java source. The first end
-  to end run will find things.
+- **The stack has now been run end to end** (2026-09-04, backend `37e2cd7`), and four assumptions
+  the client was built on are confirmed rather than inferred: `PageResponse` is flat exactly as
+  mirrored; prices arrive as bare JSON numbers (`"price":128000.50`); `LocalDateTime` arrives
+  zoneless with **microsecond** precision (`2026-09-04T23:03:31.664586`), which `new Date()` parses
+  as local time without complaint; and the `XSRF-TOKEN` / `JSESSIONID` pair survives the Vite
+  proxy, with `GET /auth/me` answering 401 for a signed-out visitor as the auth store expects.
+  What has **not** been exercised is anything image-shaped — see item 11 — and no screen has been
+  driven through a browser yet, only the wire. See [README.md](README.md) for how to run it.
