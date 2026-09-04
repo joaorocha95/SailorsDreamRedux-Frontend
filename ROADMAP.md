@@ -135,13 +135,30 @@ cannot do. Those are listed under *What the API cannot do yet*, not quietly drop
       `active = true`. What ships instead is Withdraw (`DELETE`), stated plainly as permanent and
       behind a second press.
 
-## Phase 5 — Wishlist and reviews &nbsp;·&nbsp; next
+## Phase 5 — Wishlist and reviews &nbsp;·&nbsp; done (`7b74d6d`)
 
-- [ ] Save/unsave from the card and the detail page; wishlist page in the browse shape.
-- [ ] Leave a review. Gated on a shared chat, so only offer it where it will succeed — one per
-      direction per pair.
+Two features that look alike from the outside and are shaped by opposite facts about the API.
 
-## Phase 6 — Safety
+- [x] Save/unsave from the card and the detail page; wishlist page in the browse shape.
+      `GET /wishlist` is **unpaged**, which is what makes one store answer for every card on a
+      grid — there is no "is this saved?" endpoint and none is needed. Both writes are idempotent,
+      which is what makes the optimistic update safe.
+- [x] Leave a review, from the thread — the one place a shared chat is provably there, which is
+      the only evidence this platform records that two people ever dealt with each other.
+- [ ] **"Only offer it where it will succeed" — half done.** The chat gate is honoured. *One per
+      direction per pair* cannot be: there are no read endpoints for reviews at all, so a client
+      cannot ask whether it has already written one. `src/lib/reviewed.ts` is a `localStorage`
+      memo of writes this browser actually made — not a source of truth, and wrong only in the
+      harmless direction. A review left on another device is offered again and refused by the
+      server.
+- [x] Withdrawn and unpublished saved listings. Nothing prunes a wishlist row when the boat behind
+      it changes: an unpublished one is marked rather than hidden, and a *withdrawn* one cannot be
+      detected at all, so it falls through to the listing page's "no longer listed" screen.
+
+## Phase 6 — Safety &nbsp;·&nbsp; next
+
+The thread already has an actions strip sized for these two, and `GET /blocks` is wired for the
+blocked-thread state.
 
 - [ ] Block and unblock from a thread or a profile.
 - [ ] Report, with the reason enum and optional detail. One unreviewed report per pair, so explain
@@ -195,8 +212,9 @@ centred; only `transform` and `opacity`; gate hover behind
 
 ## What the API cannot do yet
 
-Roadmap items with no endpoint behind them. Each is a small backend change; none can be worked
-around from the client, and each is listed with what would unblock it.
+Roadmap items with no endpoint behind them, plus the places where the shape that exists makes the
+client guess. Each is a small backend change; none can be worked around from this side, and each is
+listed with what would unblock it.
 
 1. **No unpublish.** `PATCH /products/{id}/activate` only sets `active = true`, and the only way
    down is `DELETE`, which soft-deletes with nothing to undo it. A seller who wants a listing off
@@ -218,6 +236,19 @@ around from the client, and each is listed with what would unblock it.
    reasoning on the server — nesting the user would leak a password hash — but the shape leaves a
    row with nothing a person recognises. *Needs:* `counterpartyName` and `productName` on the
    summary, at which point that file can be deleted.
+6. **Reviews cannot be read at all.** `POST /reviews` is the whole feature — no received reviews,
+   no aggregate rating, no way to ask whether you have already reviewed somebody. Two consequences:
+   the "one per direction per pair" gate can only be guessed at from a `localStorage` memo, and
+   **a profile page is unbuildable**, since the two things it would exist to show are the two that
+   do not exist. *Needs:* `GET /users/{id}/reviews` and a rating on `UserResponse`.
+7. **The wishlist does not filter withdrawn listings.** `findWishlistOf` has no `deleted` clause,
+   so a saved card can point at a boat whose detail page 404s, and nothing on the browse shape says
+   which. *Needs:* the same `not deleted` filter every other read path has — or, if keeping the row
+   is deliberate, a flag saying so.
+8. **Two review refusals are written for a log, not a person.** "User 3 has already reviewed user
+   7" and the never-negotiated message both reach the person who just filled in the form, because
+   `detail` is what the client shows. Everywhere else in this API that copy is good. *Needs:* names,
+   or second-person phrasing.
 
 ## Open questions
 
