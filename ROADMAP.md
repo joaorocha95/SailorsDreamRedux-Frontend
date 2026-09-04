@@ -225,13 +225,22 @@ in a diff.
       `anyRequest().authenticated()`, and there is no fallback route, so every client-side URL
       (`/messages/1`, `/listings/2`) is a 401 too. Item 13 below.
 
-- [ ] **The typefaces are never loaded.** `tokens.css` names Instrument Serif, DM Sans and
-      JetBrains Mono, and nothing anywhere fetches them — no `<link>`, no `@font-face`, no files in
-      `public/`. All three fall through to their fallbacks (Georgia, system-ui, Consolas), so the
-      typography the direction was *chosen* for has never actually been on screen. Found by reading
-      `index.html` closely rather than by looking at the app, which is its own lesson. Self-hosting
-      is the precedent here (see the note in `ambience.ts` about third-party origins), so this
-      wants the woff2 files committed and an `@font-face` block, not a Google Fonts `<link>`.
+- [x] **The typefaces.** All three were declared in `tokens.css` and never loaded — no `<link>`,
+      no `@font-face`, no files — so the app rendered in Georgia, system-ui and Consolas from
+      phase 0 until now. Self-hosted rather than linked from Google's CDN, on the precedent
+      `ambience.ts` sets about third-party origins. Six woff2 files, `latin` and `latin-ext` per
+      family, split by `unicode-range` so `latin-ext` is fetched only when a page needs it; DM Sans
+      is variable, covering 400, 500 and 700 in one file. `font-display: swap` throughout, and only
+      the display face's `latin` slice is preloaded, since the headline is the text a swap is most
+      visible on. Verified in the browser: all three load and apply, and JetBrains Mono is fetched
+      only once something price-shaped is on screen.
+
+- [ ] **A dead API is a blank page.** The router guard awaits `auth.bootstrap()`, and the store
+      deliberately re-throws anything that is not a 401 so that "the API is down" surfaces rather
+      than masquerading as "signed out". Nothing catches it, so navigation never resolves and the
+      app renders the header and nothing else — no message, no retry. Every view already has the
+      copy for this; the guard just never reaches one. Found by loading the app with the backend
+      stopped.
 
 Not attempted: reduced motion could not be *emulated* in the browser pane, so that fix is verified
 by reading the cascade rather than by watching it. Nothing image-shaped was checked at all — see
