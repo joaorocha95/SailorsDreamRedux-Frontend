@@ -197,14 +197,37 @@ audience and nothing else.
 `GET /users` is unpaged, so the directory's search filters what is already loaded rather than
 querying. Fine at this size, wrong at a real one — the first thing to change if the platform grows.
 
-## Phase 8 — Polish &nbsp;·&nbsp; next
+## Phase 8 — Polish &nbsp;·&nbsp; done, except what the backend owns
 
-Not the phase to skip. This is where it starts feeling expensive.
+The first phase audited against a **running app in a browser** rather than against source, which
+is what turned up the two real defects. Both had been shipped for phases and neither was visible
+in a diff.
 
-- [ ] Motion pass against the spec below.
-- [ ] Focus order, labels, live regions on async states.
-- [ ] `prefers-reduced-motion` audit.
-- [ ] Production build served same-origin — the proxy is dev only.
+- [x] Motion pass against the spec below. Clean: no `ease-in` anywhere, every duration from a
+      token, and nothing transitioning a layout property — only `transform`, `opacity` and colour.
+- [x] Focus order, labels, live regions on async states. **A browse card offered "save this"
+      before it said which listing it was** — the save control was earlier in the DOM than the card
+      link, so tab order ran save, card, save, card. Labels were fine (`for`/`id` in the filters,
+      wrapping labels on the auth forms — both verified by computed accessible name, not by
+      eyeballing the markup). The result counts on browse and the report queue are live regions
+      now: they are the *answer* to a filter, and only sighted users were being told anything had
+      happened.
+- [x] `prefers-reduced-motion` audit. **The global rule said "gentler, not none" and did exactly
+      none** — `0.001ms !important` on `*`, which is an instant cut, and which silently outranked
+      the four components that had each written a considered reduced-motion rule of their own. The
+      drawer's 120ms and the gallery's 80ms had never once run. One policy now, at `--d-reduced`.
+- [x] Production build served same-origin — **the client half.** `/api` was hardcoded in
+      `http.ts`, and that prefix is a dev-proxy fiction: the API's routes are at the root, so the
+      built app would have asked Spring for paths it has never heard of. It is now empty in
+      production, overridable with `VITE_API_BASE`. Verified absent from the bundle.
+- [ ] Production build served same-origin — **the server half.** Copying `dist/` into the
+      backend's static resources and asking for `/` returns **401**: the SPA shell is behind
+      `anyRequest().authenticated()`, and there is no fallback route, so every client-side URL
+      (`/messages/1`, `/listings/2`) is a 401 too. Item 13 below.
+
+Not attempted: reduced motion could not be *emulated* in the browser pane, so that fix is verified
+by reading the cascade rather than by watching it. Nothing image-shaped was checked at all — see
+item 11.
 
 ---
 
@@ -297,6 +320,18 @@ listed with what would unblock it.
     made with SQL; and nothing can be listed until a category exists, which only an admin can
     create. A fresh database therefore cannot reach a usable state without a hand-written UPDATE.
     *Needs:* a seed profile, or a first-run rule that promotes the first account.
+13. **The SPA cannot be served same-origin yet.** `/` returns 401 — the shell is behind
+    `anyRequest().authenticated()` — and there is no SPA fallback, so a deep link is a 401 rather
+    than index.html. *Needs:* `permitAll` for `/`, `/index.html`, `/assets/**` and `/favicon.ico`,
+    plus a forward for unmatched non-API paths that does **not** swallow the API's own 404s. Until
+    then the only way to run this is the dev proxy, which the roadmap is explicit is not a
+    deployment.
+14. **Not every error is a `ProblemDetail`.** A malformed request body raises
+    `HttpMessageNotReadableException`, which `GlobalExceptionHandler` does not handle, so the
+    client gets Spring's default error shape — `timestamp`/`error`/`path`, no `detail` — **with a
+    full stack trace in it**. `ApiError` degrades to "Request failed with status 400", which is
+    survivable; the stack trace reaching a browser is less so. *Needs:* a handler for it, and
+    `server.error.include-stacktrace: never`.
 
 ## Open questions
 
