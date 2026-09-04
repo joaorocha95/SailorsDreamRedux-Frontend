@@ -42,6 +42,30 @@ const router = createRouter({
     },
 
     {
+      path: '/selling',
+      name: 'selling',
+      component: () => import('@/views/SellerListingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+
+    // Two paths into one component. A listing has to exist before photographs can hang off it,
+    // so creating one ends in a `replace` onto the edit route rather than in a second form.
+    {
+      path: '/selling/new',
+      name: 'listing-new',
+      component: () => import('@/views/ListingEditView.vue'),
+      meta: { requiresAuth: true },
+    },
+
+    {
+      path: '/selling/:id/edit',
+      name: 'listing-edit',
+      component: () => import('@/views/ListingEditView.vue'),
+      props: true,
+      meta: { requiresAuth: true },
+    },
+
+    {
       path: '/messages',
       name: 'inbox',
       component: () => import('@/views/InboxView.vue'),

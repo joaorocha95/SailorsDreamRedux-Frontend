@@ -241,7 +241,15 @@ watch(() => props.id, load)
           </p>
           <p v-else class="who">Listed by a private owner</p>
 
-          <p v-if="isOwnListing" class="note">This is your listing.</p>
+          <template v-if="isOwnListing">
+            <RouterLink
+              class="cta"
+              :to="{ name: 'listing-edit', params: { id: String(listing.id) } }"
+            >
+              Edit this listing
+            </RouterLink>
+            <p class="note">This is your listing, so there is nobody here to message.</p>
+          </template>
 
           <RouterLink
             v-else-if="!auth.isAuthenticated"

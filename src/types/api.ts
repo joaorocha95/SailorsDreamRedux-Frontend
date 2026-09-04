@@ -179,6 +179,62 @@ export interface ProductSearchCriteria {
 export const SORTABLE_PRODUCT_FIELDS = ['id', 'name', 'price', 'pricePerDay'] as const
 export type SortableProductField = (typeof SORTABLE_PRODUCT_FIELDS)[number]
 
+// --- Selling ------------------------------------------------------------------
+
+/**
+ * One photograph on a listing.
+ *
+ * **Only ever returned from the upload.** There is no `GET /products/{id}/images` — the gallery
+ * rides along on the detail response as bare URLs — so the `id` needed to delete a photograph
+ * exists on the client only for photographs uploaded in that same session. An edit page opened
+ * fresh can show the pictures and cannot name them.
+ */
+export interface ProductImageResponse {
+  id: number
+  productId: number
+  /** Zero-based, and assigned by the server on append. Position 0 is the primary image. */
+  position: number
+  url: string
+}
+
+/**
+ * Creating a listing.
+ *
+ * The seller is the session, never a field. Which price is required follows from `listingType`,
+ * and it is a cross-field rule no per-field validation can express: `price` for `FOR_SALE`,
+ * `pricePerDay` for `FOR_RENT`, both for `BOTH`. Sending one the type has no use for is
+ * **rejected, not ignored** — a 400 rather than a silent drop, because discarding a number
+ * somebody deliberately typed hides a real misunderstanding about what they are listing.
+ *
+ * A new listing is created **inactive**. It is invisible until `PATCH /products/{id}/activate`.
+ */
+export interface CreateProductRequest {
+  categoryId: number
+  name: string
+  description: string
+  listingType: ListingType
+  /** Strictly positive — 0 is rejected. Omitted entirely when the type has no use for it. */
+  price?: number
+  pricePerDay?: number
+}
+
+/**
+ * Editing a listing. Every field optional, and **null means "leave unchanged"**.
+ *
+ * Which makes the price rules subtler than they look on create. The server judges what the
+ * caller *sent* for applicability, and what the listing *becomes* for completeness — so a PATCH
+ * that switches `BOTH` to `FOR_SALE` must simply not carry a `pricePerDay`, and the server is
+ * what clears the stale one. Sending it would be a 400; there is no way to null a field here.
+ */
+export interface UpdateProductRequest {
+  categoryId?: number
+  name?: string
+  description?: string
+  listingType?: ListingType
+  price?: number
+  pricePerDay?: number
+}
+
 // --- Negotiation --------------------------------------------------------------
 
 /**

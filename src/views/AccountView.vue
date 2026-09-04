@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { ApiError, api } from '@/lib/http'
+import { imageRejection } from '@/lib/image-upload'
 import { useRetryAfter } from '@/lib/retry-after'
 import { useAuthStore } from '@/stores/auth'
 import type { UserResponse } from '@/types/api'
@@ -21,10 +22,6 @@ import type { UserResponse } from '@/types/api'
 
 const auth = useAuthStore()
 const router = useRouter()
-
-/** JPEG and PNG are the only formats the server will store. */
-const ACCEPTED = ['image/jpeg', 'image/png']
-const MAX_BYTES = 8 * 1024 * 1024
 
 const name = ref(auth.user?.name ?? '')
 const phoneNumber = ref(auth.user?.phoneNumber ?? '')
@@ -87,16 +84,10 @@ async function choosePicture(event: Event) {
 
   // Checked here rather than left to the server, because the common failure is an iPhone photo
   // and "the uploaded file is not an image" would be a baffling thing to read about a photograph.
-  if (!ACCEPTED.includes(file.type)) {
-    pictureError.value =
-      'Only JPEG and PNG can be uploaded. iPhone photos are often HEIC — choose “Most Compatible” ' +
-      'in Camera settings, or export the picture as JPEG first.'
-    input.value = ''
-    return
-  }
-
-  if (file.size > MAX_BYTES) {
-    pictureError.value = `That picture is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 8 MB.`
+  // Shared with the listing photographs, which face exactly the same two refusals.
+  const rejection = imageRejection(file)
+  if (rejection) {
+    pictureError.value = rejection
     input.value = ''
     return
   }

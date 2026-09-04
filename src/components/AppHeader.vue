@@ -16,6 +16,7 @@ const { isAuthenticated, user } = storeToRefs(auth)
       <nav class="links" aria-label="Main">
         <RouterLink :to="{ name: 'browse' }">Browse</RouterLink>
         <template v-if="isAuthenticated">
+          <RouterLink :to="{ name: 'selling' }">Selling</RouterLink>
           <RouterLink :to="{ name: 'inbox' }">Messages</RouterLink>
           <!-- Arriving in a later phase; rendered now so the shell is honest about its shape. -->
           <span class="pending" aria-disabled="true">Saved</span>
