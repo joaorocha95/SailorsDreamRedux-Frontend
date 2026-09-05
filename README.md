@@ -168,11 +168,16 @@ rewrites a value that starts with `/` into a Windows path, and the bundle is sil
 ### Railway
 
 Nothing in this repository configures the API; it is deployed from `../sailors-dream-redux` as the
-image its CI publishes to GHCR. Two things it needs that are easy to miss:
+image its CI publishes to GHCR.
 
-- **The port.** Boot listens on 8080 and nothing in `application.yaml` reads `$PORT`, so either set
-  `PORT=8080` as a service variable or teach the backend `server.port: ${PORT:8080}`. A mismatch
-  starts cleanly and then answers `502 Application failed to respond` to everything.
+- **The port needs nothing set.** The backend binds `${PORT:8080}`, so it takes whatever Railway
+  injects and falls back to 8080 anywhere that injects nothing. Recorded because it was not always
+  true, and the failure it caused is worth recognising: Boot used to sit on 8080 while Railway
+  dialled its own choice, which produced `502 Application failed to respond` on every request from
+  a container that was **completely healthy** — logs showing a clean start, a live database
+  connection, and `Tomcat started on port 8080`, with `connection refused` at the edge. When a
+  service looks dead and its logs look fine, suspect this rather than a crash. Fixed in the backend
+  on 2026-09-05.
 - **The environment.** `DATABASE_URL`, `DB_USERNAME`, `DB_PASSWORD`, `IMAGES_STORE=oci`,
   `IMAGES_BASE_URL` and the five `OCI_S3_*` values are all required and none have defaults — the
   app fails at startup rather than coming up half-working. `DATABASE_URL` must point at the
