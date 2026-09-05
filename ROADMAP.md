@@ -145,15 +145,17 @@ Two features that look alike from the outside and are shaped by opposite facts a
       which is what makes the optimistic update safe.
 - [x] Leave a review, from the thread — the one place a shared chat is provably there, which is
       the only evidence this platform records that two people ever dealt with each other.
-- [ ] **"Only offer it where it will succeed" — half done.** The chat gate is honoured. *One per
-      direction per pair* cannot be: there are no read endpoints for reviews at all, so a client
-      cannot ask whether it has already written one. `src/lib/reviewed.ts` is a `localStorage`
-      memo of writes this browser actually made — not a source of truth, and wrong only in the
-      harmless direction. A review left on another device is offered again and refused by the
-      server.
-- [x] Withdrawn and unpublished saved listings. Nothing prunes a wishlist row when the boat behind
-      it changes: an unpublished one is marked rather than hidden, and a *withdrawn* one cannot be
-      detected at all, so it falls through to the listing page's "no longer listed" screen.
+- [ ] **"Only offer it where it will succeed" — half done.** Two of the three gates are honoured:
+      the shared chat, and a block placed by you (2026-09-05 — a block now refuses a review in
+      both directions, and the outgoing half is knowable from `GET /blocks`). *One per direction
+      per pair* cannot be: there are no read endpoints for reviews at all, so a client cannot ask
+      whether it has already written one. `src/lib/reviewed.ts` is a `localStorage` memo of writes
+      this browser actually made — not a source of truth, and wrong only in the harmless
+      direction. A review left on another device is offered again and refused by the server. The
+      inbound block is the same shape of unknowable and stays that way on purpose.
+- [x] Unpublished saved listings, marked rather than hidden. **Withdrawn ones no longer arrive**
+      (2026-09-05): `GET /wishlist` filters `deleted`, so the case that used to fall through to
+      the listing page's "no longer listed" screen is unreachable from here.
 
 ## Phase 6 — Safety &nbsp;·&nbsp; done (`1bc5b56`)
 
@@ -167,8 +169,12 @@ deliberately not gated on ever having negotiated.
       profile page, and there cannot be one until reviews can be read.
 - [x] Report, with the reason enum and optional detail — **1000** characters here, not the 255
       nearly every other text field carries.
-- [x] One unreviewed report per pair, explained rather than shown raw. The single place in this
-      client where the server's `detail` is deliberately not surfaced; see TODO.md §2.4 for why.
+- [x] One unreviewed report per pair, explained rather than shown raw. One of two places in this
+      client where the server's `detail` is deliberately not surfaced — the other is the block
+      refusal on a review, added 2026-09-05; see TODO.md §2.4 for why.
+- [x] **Reporting offered where a review cannot go.** A block takes the review control away and
+      says so, because `POST /reports` is deliberately ungated by blocks: the tool that goes to
+      staff stays available exactly when the one that publishes to everyone does not.
 - [x] **A blocked list on the account page**, which phase 6 did not list and needed. Blocking
       removes the conversation from *both* inboxes, so without somewhere to undo it the only route
       back would be a bookmarked thread URL — an easily-reversible act would be permanent in

@@ -141,10 +141,11 @@ it already holds. It is the one collection here with no natural ceiling — a wi
 one person's saves and a block list by one person's patience, but the user table is bounded by
 success. *Needs:* a `PageResponse` and a `?name=` filter, the shape browse already has.
 
-**The wishlist does not filter withdrawn listings.** `findWishlistOf` has no `deleted` clause, so a
-saved card can point at a boat whose detail page 404s, and nothing on the browse shape says which.
-*Needs:* the same `not deleted` filter every other read path has — or, if keeping the row is
-deliberate, a flag saying so.
+**Nothing reports an inbound block.** `GET /blocks` returns the caller's own outgoing blocks only,
+which is deliberate — answering "does this person block me" hands a harasser the signal. The cost
+is that a control gated on a block can only be half-hidden: `ThreadView` takes the review away for
+someone you blocked and learns the other direction from the 403. *Needs:* nothing, unless the
+half-hidden control proves worse than the refusal; this is a trade the API made on purpose.
 
 **Descending price sorts are unsafe.** Nothing pins where nulls land and Postgres puts them *first*
 descending, so "price, high to low" would open with every rent-only listing. This is why the browse
@@ -161,12 +162,14 @@ trace in it**. `ApiError` degrades to "Request failed with status 400", which is
 stack trace reaching a browser is less so. *Needs:* a handler for it, and
 `server.error.include-stacktrace: never`.
 
-**Three refusals are written for a log, not a person.** "User 3 has already reviewed user 7", the
-never-negotiated message, and "User 3 already has an unreviewed report against user 7" all reach
-the person who just filled in the form, because `detail` is what the client shows. Everywhere else
-in this API that copy is good. The report one is worked around in `SafetyActions.vue` — the only
-`detail` this client suppresses — which is a patch over a string we do not own, and it will drift.
-*Needs:* names, or second-person phrasing.
+**Four refusals are written for a log, not a person.** "User 3 has already reviewed user 7", the
+never-negotiated message, "User 3 already has an unreviewed report against user 7", and — since the
+block gate landed on reviews — "A block stands between users 3 and 7; neither can start or continue
+a negotiation with the other", which additionally describes an act the person did not attempt. All
+four reach whoever just filled in the form, because `detail` is what the client shows. Everywhere
+else in this API that copy is good. Two are now worked around, in `SafetyActions.vue` and
+`ThreadView.vue` — the only `detail`s this client suppresses — which is a patch over strings we do
+not own, and it will drift. *Needs:* names, or second-person phrasing.
 
 **No bootstrap path.** `accountType` is never settable through the API, so the first admin is made
 with SQL; and nothing can be listed until a category exists, which only an admin can create. A
