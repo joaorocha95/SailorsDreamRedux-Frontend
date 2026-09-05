@@ -16,6 +16,11 @@ import type { ProductResponse, UserResponse } from '@/types/api'
  *
  * **If the API ever grows a `counterpartyName` and a `productName` on `ChatResponse`, delete this
  * file.** It exists to paper over a gap, not because a client-side directory is a good idea.
+ *
+ * What comes back from `/users/{id}` here is the **public view**: name, avatar and `isActive`,
+ * with `email`, `phoneNumber` and `accountType` nulled unless the viewer happens to be the
+ * subject or an admin. That is exactly what this file is for and no caller wants more — but it
+ * means a `UserResponse` from here must never be read for contact details.
  */
 
 const users = new Map<number, Promise<UserResponse | null>>()

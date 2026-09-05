@@ -13,14 +13,15 @@ import { useWishlistStore } from '@/stores/wishlist'
  * to save, not by how many exist, so the whole set comes back at once and there is no pager to
  * build.
  *
- * Two states the server can hand back that browse never does, because nothing prunes a wishlist
- * row when the listing behind it changes:
+ * One state the server can hand back that browse never does, because saving a listing does not
+ * pin it: **unpublished**. `active` is not checked on the way in — following a listing that is
+ * not live is legitimate — and a seller can unpublish one afterwards. Marked, not hidden.
  *
- *  - **Unpublished.** `active` is not checked on the way in — following a listing that is not
- *    live is legitimate — and a seller can unpublish one afterwards. Marked, not hidden.
- *  - **Withdrawn.** A soft-deleted listing is *not* filtered out of the wishlist, so a card can
- *    point at a boat whose detail page 404s. Nothing on the browse shape says which, so this is
- *    left to the listing page, which already has a "no longer listed" screen for exactly it.
+ * **Withdrawn listings no longer arrive.** A soft-deleted one used to stay on the list and point
+ * at a boat whose detail page 404s; the endpoint filters `deleted` now, so the row is simply
+ * absent and the count moves. Only `deleted` is filtered, never `isActive`, which is the whole
+ * reason the case above survives. The row is hidden rather than dropped, so removing it still
+ * works if a card for it is somehow on screen.
  */
 
 const wishlist = useWishlistStore()

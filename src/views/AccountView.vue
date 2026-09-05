@@ -8,7 +8,7 @@ import { imageRejection } from '@/lib/image-upload'
 import { useRetryAfter } from '@/lib/retry-after'
 import { useAuthStore } from '@/stores/auth'
 import { useBlocksStore } from '@/stores/blocks'
-import type { UserResponse } from '@/types/api'
+import type { UpdateUserRequest, UserResponse } from '@/types/api'
 
 /**
  * The account: what can be changed, what can be switched off, and what cannot be undone.
@@ -85,10 +85,11 @@ async function saveProfile() {
     // Only what actually changed. A null field means "leave unchanged" on the server, and a
     // present-but-blank one is a 400 rather than a silently blanked column — so sending the
     // whole form back would turn an untouched field into a value being re-asserted.
-    const updated = await api.patch<UserResponse>(`/users/${auth.user.id}`, {
+    const body: UpdateUserRequest = {
       name: name.value === auth.user.name ? undefined : name.value,
       phoneNumber: phoneNumber.value === auth.user.phoneNumber ? undefined : phoneNumber.value,
-    })
+    }
+    const updated = await api.patch<UserResponse>(`/users/${auth.user.id}`, body)
     auth.setUser(updated)
     profileSaved.value = true
   } catch (error) {

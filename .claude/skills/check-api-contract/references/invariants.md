@@ -38,6 +38,10 @@ client is wrong. Sources: `ROADMAP.md` and the backend's `docs/reference.html`.
   authenticated. Show a way back, do not lock them out.
 - **Banned and closed accounts return distinct 403s.** Keep the messages distinct too.
 - **Profile edit covers name and phone only.**
+- **`GET /users/{id}` redacts `email`, `phoneNumber` and `accountType`** for anyone but the
+  account's owner or an admin. The keys stay present and go null, so a truthiness check is right
+  and a presence check (`'email' in user`) is not. `GET /users` is admin-only and still full, so
+  the same type describes two shapes — null there means *withheld from you*, never *unset*.
 - **Signup is IP-rate-limited**: 429 with `Retry-After`. Disable the control and count down rather
   than letting the user retry into another refusal. `ApiError.retryAfterSeconds` carries this.
 
@@ -55,12 +59,22 @@ client is wrong. Sources: `ROADMAP.md` and the backend's `docs/reference.html`.
 
 - **A review is gated on a shared chat**, one per direction per pair. Only offer it where it will
   succeed.
+- **A block stops a review in both directions** — 403, and its `detail` names account ids and
+  talks about negotiations rather than reviews, so it is one of the two refusals worth rewording
+  rather than showing. Your own outgoing blocks are knowable up front and must take the control
+  away; an inbound block is not knowable at all, so the 403 is the only way to learn it.
+- **Reporting is deliberately not block-gated**, so it is what to offer where a review cannot go.
 - **One unreviewed report per pair.** Explain the refusal rather than surfacing a raw 400.
 - **Blocking and the wishlist have no retirement gate.** Deliberate.
+- **The wishlist hides withdrawn listings** (`deleted`) and keeps unpublished ones (`isActive`
+  false), so a saved card can be unlisted but never point at a 404.
 
 ## Everywhere
 
 - **Errors are RFC 7807 `ProblemDetail`.** `detail` is written for a person to read — show it.
-- **Money is a decimal string on the wire.** Never parse it into a `number` to display or compare.
+- **Money is a bare JSON number on the wire**, not a string: `BigDecimal` serialises that way
+  under Jackson's defaults and the backend configures nothing that changes it. Confirmed against a
+  running instance, not inferred. `price` and `pricePerDay` are `number | null` in `api.ts`, and a
+  check that "corrects" them back to `string` is undoing a fix.
 - **The `/api` prefix and the dev proxy are development only.** Production serves the built SPA
   same-origin with the API; the cookie session and CSRF double-submit both assume that.

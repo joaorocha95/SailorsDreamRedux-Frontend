@@ -100,6 +100,12 @@ const sendingReview = ref(false)
 const reviewError = ref('')
 const reviewDone = ref(false)
 const alreadyReviewed = ref(false)
+/**
+ * They blocked you — only ever learned from the 403 on a send, since no endpoint reports an
+ * inbound block and there should not be one. Kept for the life of the thread so the form is not
+ * offered again into the same refusal.
+ */
+const reviewBlocked = ref(false)
 
 const viewerId = computed(() => auth.user?.id ?? -1)
 const otherId = computed(() => (chat.value ? counterpartyId(chat.value, viewerId.value) : -1))
@@ -112,8 +118,22 @@ const otherId = computed(() => (chat.value ? counterpartyId(chat.value, viewerId
  * there is no endpoint for who blocked *you*, and there should not be.
  */
 const blockedByMe = computed(() => otherId.value > 0 && blocks.isBlocked(otherId.value))
-/** Offered unless this browser knows the review has already been written. */
-const canReview = computed(() => !alreadyReviewed.value && !reviewDone.value && otherId.value > 0)
+/**
+ * Offered unless this browser knows the write would be refused.
+ *
+ * A block now stops a review in **both** directions, and half of that is knowable in advance:
+ * `blockedByMe` comes off the blocks store, so blocking someone from the strip below takes the
+ * review button away in the same tick rather than leaving it there to earn a 403. The other half
+ * is not knowable and never will be — `reviewBlocked` is what the refusal leaves behind.
+ */
+const canReview = computed(
+  () =>
+    !alreadyReviewed.value &&
+    !reviewDone.value &&
+    !blockedByMe.value &&
+    !reviewBlocked.value &&
+    otherId.value > 0,
+)
 const entries = computed(() => threadEntries(messages.value, viewerId.value))
 const unread = computed(() => chat.value?.unreadCount ?? 0)
 
@@ -318,10 +338,14 @@ async function send() {
 /**
  * Leaving the review.
  *
- * Every refusal here is a different situation and the server's `detail` names which — never
- * negotiated, already reviewed, one of the two accounts retired. The one case worth handling
- * beyond showing that sentence is success, which is remembered so the form is not offered again
- * on this browser.
+ * Most refusals here are a different situation and the server's `detail` names which — never
+ * negotiated, already reviewed, one of the two accounts retired — so that sentence is shown.
+ *
+ * The 403 is the exception, for the same reason the duplicate report is in `SafetyActions`: it
+ * reads "A block stands between users 3 and 7; neither can start or continue a negotiation with
+ * the other", which names account ids at a person and describes an act they did not attempt. It
+ * is also the one refusal that says something about the composer's future rather than this
+ * attempt, so it closes the form instead of annotating it.
  */
 async function submitReview() {
   if (rating.value < 1 || sendingReview.value || reviewWait.value > 0) return
@@ -341,12 +365,21 @@ async function submitReview() {
     reviewDone.value = true
     reviewOpen.value = false
   } catch (error) {
-    if (error instanceof ApiError) {
-      startReviewWait(error.retryAfterSeconds)
-      reviewError.value = error.message
-    } else {
+    if (!(error instanceof ApiError)) {
       reviewError.value = 'The review did not send. Check your connection and try again.'
+      return
     }
+
+    startReviewWait(error.retryAfterSeconds)
+
+    if (error.isForbidden) {
+      reviewBlocked.value = true
+      reviewOpen.value = false
+      reviewError.value = ''
+      return
+    }
+
+    reviewError.value = error.message
   } finally {
     sendingReview.value = false
   }
@@ -403,6 +436,7 @@ watch(
     sendError.value = ''
     reviewOpen.value = false
     reviewDone.value = false
+    reviewBlocked.value = false
     reviewError.value = ''
     rating.value = 0
     comment.value = ''
@@ -469,6 +503,18 @@ watch(
         <p v-else-if="reviewDone" class="done" role="status">
           Review left. Thank you — one per person, so this is spent now.
         </p>
+        <!-- A block stops a review both ways. Which side placed it is deliberately not said: the
+             server does not say, and the person reading this already knows whether it was them.
+             Reporting is offered in its place — it is ungated by blocks on purpose, being the
+             channel that goes to staff rather than to everyone. -->
+        <p
+          v-else-if="blockedByMe || reviewBlocked"
+          class="done"
+          :role="reviewBlocked ? 'status' : undefined"
+        >
+          A block stands between you, so a review cannot be left either way. If there is conduct
+          worth raising, report it below — that goes to staff.
+        </p>
         <p v-else-if="alreadyReviewed" class="done">You have already reviewed this person.</p>
       </div>
 
@@ -480,7 +526,10 @@ watch(
         context="thread"
       />
 
-      <form v-if="reviewOpen" class="review" @submit.prevent="submitReview">
+      <!-- `canReview` as well as `reviewOpen`, so blocking someone from the strip above closes a
+           composer that is already open rather than leaving a form on screen underneath a line
+           saying it cannot be sent. -->
+      <form v-if="reviewOpen && canReview" class="review" @submit.prevent="submitReview">
         <p class="review-lede">
           How was dealing with {{ other?.name ?? 'them' }}? Reviews are one per person, per
           direction, and cannot be edited afterwards.

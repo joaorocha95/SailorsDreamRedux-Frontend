@@ -43,8 +43,13 @@ const rowError = ref('')
 const matches = computed(() => {
   const needle = search.value.trim().toLowerCase()
   if (needle === '') return users.value
+  // `email` is nullable on the wire — `GET /users/{id}` withholds it from anyone who is not the
+  // account's owner or an admin. This page reads `GET /users`, which is admin-only and therefore
+  // always the full record, so the fallback is unreachable rather than a case being handled: it
+  // is here because the type is honest about a shape this route does not serve.
   return users.value.filter(
-    (user) => user.name.toLowerCase().includes(needle) || user.email.toLowerCase().includes(needle),
+    (user) =>
+      user.name.toLowerCase().includes(needle) || (user.email ?? '').toLowerCase().includes(needle),
   )
 })
 
@@ -137,7 +142,9 @@ onMounted(load)
           <div class="who">
             <p class="name">
               {{ user.name }}
-              <span v-if="user.accountType !== 'USER'" class="tier">{{ user.accountType }}</span>
+              <span v-if="user.accountType && user.accountType !== 'USER'" class="tier">{{
+                user.accountType
+              }}</span>
               <span v-if="user.id === auth.user?.id" class="tier you">you</span>
             </p>
             <p class="email">{{ user.email }}</p>

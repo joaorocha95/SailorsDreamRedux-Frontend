@@ -89,13 +89,35 @@ export interface ProductResponse {
   imageUrls: string[] | null
 }
 
+/**
+ * An account. Like `ProductResponse`, one record with two shapes, and which one arrives is an
+ * access-control decision made on the server:
+ *
+ *  - **full** — `/auth/me`, the account's owner reading themselves, and any admin, including the
+ *    unpaged `GET /users`. Every field is populated.
+ *  - **public** — `GET /users/{id}` for everyone else. `email`, `phoneNumber` and `accountType`
+ *    come back **null**, because that route needs nothing of its caller but a session: returning
+ *    the full record made it a directory dump one row at a time, which is what `GET /users` is
+ *    admin-only to prevent.
+ *
+ * The keys are present either way, so `if (user.email)` still works and `'email' in user` does
+ * not. The null means *withheld from you*, never *unset* — the same distinction `imageUrls` and
+ * `ChatResponse.messages` carry. `id`, `name`, `profilePictureUrl` and `isActive` are the same
+ * for every viewer, which is what a seller card, a chat header and a review byline need.
+ */
 export interface UserResponse {
   id: number
   name: string
-  email: string
-  phoneNumber: string
+  /** Null unless you are this account's owner or an admin. */
+  email: string | null
+  /** Null unless you are this account's owner or an admin. */
+  phoneNumber: string | null
   profilePictureUrl: string | null
-  accountType: AccountType
+  /**
+   * Null unless you are this account's owner or an admin — it is the field that answers "which of
+   * these accounts are the admins", and nothing renders a staff badge to a stranger.
+   */
+  accountType: AccountType | null
   /** One positive field derived from three separately stored flags on the server. */
   isActive: boolean
 }
@@ -170,6 +192,20 @@ export interface CreateUserRequest {
   /** ISO date, and must be in the past. */
   birthDate: string
   phoneNumber: string
+}
+
+/**
+ * Editing your own profile — **name and phone only**. Email is the login identifier and is not
+ * editable here; neither is the password.
+ *
+ * An absent field means "leave unchanged", the same convention `UpdateProductRequest` follows —
+ * and `undefined` is how that travels, since `JSON.stringify` drops it. A field that is present
+ * but blank is a 400 rather than a silently emptied column, so an untouched field must be omitted
+ * rather than sent back as it was.
+ */
+export interface UpdateUserRequest {
+  name?: string
+  phoneNumber?: string
 }
 
 /**
