@@ -57,8 +57,10 @@ npm run dev
 ```
 
 `vite.config.ts` proxies `/api/*` to `:8080`, so the app talks to `/api/products` and the proxy
-strips the prefix. **The proxy is development only** — in production the SPA is served
-same-origin with the API, which is what the cookie session and the CSRF double-submit both assume.
+strips the prefix. **This proxy is development only** — `vite dev` does not run in production.
+What replaces it there is a rewrite on the host doing the same job for the same reason, since the
+cookie session and the CSRF double-submit both assume the browser sees one origin; see
+[Deploying it](#deploying-it).
 
 ### 3. Bootstrap the data
 
@@ -100,6 +102,96 @@ if configured to. To clear the database and start clean:
 ```bash
 cd ../sailors-dream-redux && docker compose down -v
 ```
+
+## Deploying it
+
+The client is hosted on **Vercel** and the API on **Railway**, which are two different origins —
+and that is the whole problem this section exists to solve.
+
+### Why the API is proxied rather than called directly
+
+A cookie session and a CSRF double-submit both assume one origin. Calling
+`https://…up.railway.app` straight from `https://…vercel.app` breaks on the second of those in a
+way no amount of CORS configuration fixes: [`src/lib/http.ts`](src/lib/http.ts) reads the
+`XSRF-TOKEN` value out of `document.cookie`, that cookie belongs to the Railway host, and
+JavaScript cannot read another site's cookies. Every write would send no `X-XSRF-TOKEN` and take a
+403 — sign-in included.
+
+The session cookie has the same shape of problem one level down: cross-site it needs
+`SameSite=None; Secure`, which Safari and Firefox block by default. And both `vercel.app` and
+`up.railway.app` are on the Public Suffix List, so there is no shared parent domain that would
+make the two same-site.
+
+So `vercel.json` rewrites `/api/*` to Railway **server-side**. The browser only ever talks to the
+Vercel origin, which makes the cookies first-party, the CSRF handshake unchanged, and CORS
+unnecessary — the production counterpart of the dev proxy in `vite.config.ts`, and the case
+`http.ts` was already written for. The cost is one extra hop per API call.
+
+### `vercel.json`
+
+Two rules, and the order is load-bearing:
+
+1. `/api/:path*` → the Railway origin, prefix stripped, exactly as the dev proxy strips it.
+2. `/(.*)` → `/index.html`, so a deep link into a client route (`/messages/1`, `/listings/2`)
+   serves the shell instead of 404ing.
+
+The catch-all does not swallow the bundle: Vercel checks the filesystem before applying rewrites,
+so anything real under `/assets`, `/fonts` and `/favicon.ico` is served as a file. It does not
+swallow the API either, because the rule above it matched first. Put the two the other way round
+and every API call returns the HTML shell with a 200 — a failure that surfaces as JSON parse
+errors somewhere far away.
+
+### The client half: `.env.production`
+
+The rewrite is only half the arrangement — the app has to actually ask for `/api/products` rather
+than `/products`. That is `VITE_API_BASE=/api`, and it lives in
+[`.env.production`](.env.production) rather than in Vercel's dashboard so that it cannot drift from
+the `vercel.json` it has to match. It is a path, not a secret. Vite reads the file for
+`vite build` and never for `vite dev`, where the config's own proxy already answers.
+
+Without it a production build resolves the API to the root of the Vercel origin, where nothing
+answers — `http.ts` defaults to `''` precisely because the same-origin case needs no prefix. A
+dashboard variable of the same name overrides the file if a deployment ever needs to point
+somewhere else.
+
+**Building locally on Windows, set it in a file or in PowerShell, never as a Git Bash prefix.**
+`VITE_API_BASE=/api npm run build` under Git Bash bakes in `C:/Program Files/Git/api`: MSYS
+rewrites a value that starts with `/` into a Windows path, and the bundle is silently wrong.
+
+### Vercel project settings
+
+- **Node 22 or 24.** `package.json` declares `"node": "^22.18.0 || >=24.12.0"` and an older
+  default fails the install.
+- Build command and output directory are the Vite defaults (`npm run build`, `dist`).
+- No environment variables needed — see the section above.
+
+### Railway
+
+Nothing in this repository configures the API; it is deployed from `../sailors-dream-redux` as the
+image its CI publishes to GHCR. Two things it needs that are easy to miss:
+
+- **The port.** Boot listens on 8080 and nothing in `application.yaml` reads `$PORT`, so either set
+  `PORT=8080` as a service variable or teach the backend `server.port: ${PORT:8080}`. A mismatch
+  starts cleanly and then answers `502 Application failed to respond` to everything.
+- **The environment.** `DATABASE_URL`, `DB_USERNAME`, `DB_PASSWORD`, `IMAGES_STORE=oci`,
+  `IMAGES_BASE_URL` and the five `OCI_S3_*` values are all required and none have defaults — the
+  app fails at startup rather than coming up half-working. `DATABASE_URL` must point at the
+  Supabase **pooler** (`aws-1-eu-west-1.pooler.supabase.com:5432`) with `DB_USERNAME` as
+  `postgres.<project-ref>`; the direct `db.<ref>.supabase.co` host is IPv6-only and unreachable
+  from a container.
+
+### Verifying a deploy
+
+In this order, because each step rules out everything before it:
+
+1. `GET /products` directly on the Railway origin — the API is up at all.
+2. The same through `https://<app>.vercel.app/api/products` — the rewrite works and strips the
+   prefix.
+3. Sign in — the session cookie survives the proxy and comes back first-party.
+4. Any write (save a listing, send a message) — the CSRF double-submit works, which is the thing
+   the whole arrangement exists to protect.
+5. A listing photograph — those load straight from OCI object storage on absolute URLs and touch
+   neither host, so a failure here is the image store, not the deployment.
 
 ## Recommended IDE Setup
 
